@@ -52,6 +52,7 @@ def main(config: ExperimentConfig):
         sde_sample_freq=config.sde_sample_freq,
         learning_rate=config.learning_rate,
         verbose=config.verbose,
+        seed=config.seed,
     )
 
     model.set_logger(create_mlflow_logger())
