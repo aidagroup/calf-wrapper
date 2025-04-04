@@ -3,7 +3,13 @@
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="gfx/logo.png" alt="CALF-Wrapper Logo" width="400">
+</p>
+
 Implementation of the paper "Unviversal policy wrapper with guarantees".
+
+
 
 ## Overview
 
@@ -28,7 +34,10 @@ CALF-Wrapper provides a universal policy wrapper with formal guarantees. The rep
 │   ├── train_ppo.py      # PPO training script
 │   ├── eval.py           # Evaluation script
 │   └── scripts/          # Additional experiment scripts
-└── tests/                # Test suite
+└── reproduce/            # 
+    ├── cartpole
+    └── pendulum
+
 ```
 
 ## Installation
@@ -72,6 +81,8 @@ Run experiments and reproduce paper results:
 # See run/README.md for detailed instructions
 uv run run/eval.py
 ```
+
+Actually we have prepared for you a list of reproducable bash scripts that fully reproduce the plots from the original paper
 
 ### Tests
 

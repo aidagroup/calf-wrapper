@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Any, Literal
 from pathlib import Path
 import os
@@ -8,19 +8,16 @@ import mlflow
 import tempfile
 import json
 import tyro
-from typing import Optional
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3 import PPO
 
 from src.calf_wrapper import CALFWrapper
-from src.optimizers.bruteforce import optimize
 from src.utils.mlflow import mlflow_monitoring, MlflowConfig
 from src.controllers.pendulum import EnergyBasedStabilizingPolicy
 from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
 from src.controllers.controller import Controller
 from src.utils import NumpyEncoder
-
-current_dir = Path(__file__).parent
+from src import run_path
 
 
 @dataclass
@@ -72,10 +69,10 @@ class EvalConfig:
     n_steps: int
     """Number of evaluation steps to run"""
 
-    eval_mode: Literal["fallback", "checkpoint", "calf_wrapper"] = "fallback"
+    eval_mode: Literal["fallback", "base", "calf_wrapper"] = "fallback"
     """Evaluation mode:
     - fallback: Use CALF with fallback to stabilizing controller
-    - checkpoint: Evaluate pure learned policy
+    - base: Evaluate pure learned policy
     - calf_wrapper: Use full CALF framework with probability-based switching
     """
 
@@ -97,15 +94,15 @@ presets = {
     # - Tuned stabilizing controller parameters
     # - CALF configuration for safe evaluation
     # - MLflow tracking setup
-    "pendulum_fallback": (
-        "run only the fallback controller on pendulum",
+    "pendulum": (
+        "Pendulum configuration",
         EvalConfig(
             mlflow=MlflowConfig(
-                tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
                 experiment_name="eval/pendulum",
             ),
             env_id="Pendulum-v1",
-            model_path=current_dir
+            model_path=run_path
             / "artifacts"
             / "ppo_Pendulum-v1_9"
             / "checkpoints"
@@ -123,20 +120,20 @@ presets = {
             eval_mode="fallback",
             calf=CalfConfig(),
             seed=42,
-            n_envs=1,
+            n_envs=30,
             n_steps=200,
         ),
     ),
-    "cartpole_fallback": (
-        "Evaluation of cartpole with PPO",
+    "cartpole": (
+        "Cartpole configuration",
         EvalConfig(
             mlflow=MlflowConfig(
-                tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
                 experiment_name="eval/cartpole",
             ),
             env_id="CartpoleSwingupEnvLong-v0",
             n_steps=1000,
-            model_path=current_dir
+            model_path=run_path
             / "artifacts"
             / "ppo_CartpoleSwingupEnv-v0_42"
             / "checkpoints"
@@ -152,7 +149,7 @@ presets = {
             ),
             eval_mode="fallback",
             seed=42,
-            n_envs=1,
+            n_envs=30,
             calf=CalfConfig(),
         ),
     ),
@@ -189,7 +186,7 @@ def main(config: EvalConfig):
 
     if config.eval_mode == "fallback":
         data = run_episode(config.stabilizing_policy.get_action, env, config.n_steps)
-    elif config.eval_mode == "checkpoint":
+    elif config.eval_mode == "base":
         model = PPO.load(config.model_path, device=config.device, seed=config.seed)
         data = run_episode(
             lambda obs: model.predict(obs, deterministic=config.deterministic)[0],
@@ -197,44 +194,13 @@ def main(config: EvalConfig):
             config.n_steps,
         )
     elif config.eval_mode == "calf_wrapper":
-        if config.calf.optimize_relaxprob:
-
-            def objective(relaxprob_init: float) -> float:
-                model = PPO.load(
-                    config.model_path, device=config.device, seed=config.seed
-                )
-                env = CALFWrapper(
-                    make_vec_env(config.env_id, n_envs=config.n_envs, seed=config.seed),
-                    model,
-                    config.stabilizing_policy,
-                    calf_change_rate=config.calf.calf_change_rate,
-                    relaxprob_init=relaxprob_init,
-                    relaxprob_factor=config.calf.relaxprob_factor,
-                    seed=config.seed,
-                )
-                data = run_episode(
-                    lambda obs: model.predict(obs, deterministic=config.deterministic)[
-                        0
-                    ],
-                    env,
-                    config.n_steps,
-                )
-                final_rewards = np.vstack([item["reward"] for item in data]).sum(axis=0)
-                return np.mean(final_rewards)
-
-            print("Optimizing relaxprob_init")
-            relaxprob_init = optimize(objective)
-            print(f"Optimized relaxprob_init: {relaxprob_init}")
-        else:
-            relaxprob_init = config.calf.relaxprob_init
-
         model = PPO.load(config.model_path, device=config.device, seed=config.seed)
         env = CALFWrapper(
             env,
             model,
             config.stabilizing_policy,
             calf_change_rate=config.calf.calf_change_rate,
-            relaxprob_init=relaxprob_init,
+            relaxprob_init=config.calf.relaxprob_init,
             relaxprob_factor=config.calf.relaxprob_factor,
             seed=config.seed,
         )
@@ -243,10 +209,11 @@ def main(config: EvalConfig):
             env,
             config.n_steps,
         )
-        mlflow.log_metric("relaxprob_init", relaxprob_init)
     else:
         raise ValueError(f"Unknown eval mode: {config.eval_mode}")
     env.close()
+
+    # Log results
     final_rewards = np.vstack([item["reward"] for item in data]).sum(axis=0)
     for i, reward in enumerate(final_rewards):
         mlflow.log_metric("reward", reward, step=i)
