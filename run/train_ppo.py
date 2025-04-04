@@ -8,7 +8,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList
 from stable_baselines3.common.env_util import make_vec_env
 
-from src.callback import PlottingCallback
 from src.utils.mlflow import MlflowConfig, mlflow_monitoring, create_mlflow_logger
 
 current_dir = Path(__file__).parent
@@ -16,24 +15,104 @@ current_dir = Path(__file__).parent
 
 @dataclass
 class ExperimentConfig:
+    """Configuration for PPO training experiment."""
+
     mlflow: MlflowConfig = field(
         default_factory=lambda: MlflowConfig(
             tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
             experiment_name=current_dir.name,
         )
     )
+    """MLflow configuration for experiment tracking"""
+
     local_artifacts_path: Path = current_dir / "artifacts"
+    """Path to store local training artifacts like model checkpoints and logs"""
+
     env_id: str = "Pendulum-v1"
+    """Gym environment ID to train on"""
+
     n_envs: int = 1
+    """Number of environments for vectorized training. Higher values increase training throughput"""
+
     gamma: float = 0.98
+    """Discount factor for future rewards. Range [0,1]. Higher values prioritize long-term rewards"""
+
     use_sde: bool = True
+    """Whether to use State Dependent Exploration for action sampling"""
+
     sde_sample_freq: int = 4
+    """How often to sample a new noise matrix for State Dependent Exploration"""
+
     learning_rate: float = 1e-3
+    """Learning rate for the optimizer. Controls step size during gradient updates"""
+
     verbose: int = 1
+    """Verbosity level: 0=no output, 1=info, 2=debug"""
+
     seed: int = 42
+    """Random seed for reproducibility across training runs"""
+
     total_timesteps: int = 300_000
-    n_steps: int = 2048
-    save_model_every_steps: int = 2048
+    """Total number of timesteps to train for"""
+
+    n_steps: int = 3000
+    """Number of steps to run for each environment per policy rollout. Affects sample efficiency"""
+
+    save_model_every_steps: int = 3000
+    """Frequency of saving model checkpoints during training"""
+
+    device: str = "cuda:0"
+    """Device to run training on: 'cpu' or 'cuda:n' for GPU"""
+
+
+presets = {
+    # Preset configurations for different environments
+    # Usage: python train_ppo.py pendulum  # For pendulum preset
+    #        python train_ppo.py cartpole  # For cartpole preset
+    #        python train_ppo.py --help    # Show all available options
+    #
+    # Each preset is a tuple of (description, config) where:
+    # - description: Brief explanation of the training setup
+    # - config: ExperimentConfig with environment-specific hyperparameters
+    "pendulum": (
+        "Training of PPO on Pendulum-v1",
+        ExperimentConfig(
+            env_id="Pendulum-v1",
+            total_timesteps=102_000,
+            n_steps=3000,
+            n_envs=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            learning_rate=1e-3,
+            verbose=1,
+            seed=9,
+            device="cpu",  # For devices that do not have a GPU
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
+                experiment_name="ppo_pendulum_train",
+            ),
+        ),
+    ),
+    "cartpole": (
+        "Training of PPO on CartPole-v1",
+        ExperimentConfig(
+            env_id="CartpoleSwingupEnv-v0",
+            total_timesteps=300_000,
+            n_steps=3000,
+            n_envs=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            learning_rate=1e-3,
+            verbose=1,
+            seed=42,
+            device="cpu",  # For devices that do not have a GPU
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
+                experiment_name="ppo_cartpole_train",
+            ),
+        ),
+    ),
+}
 
 
 @mlflow_monitoring()
@@ -53,6 +132,7 @@ def main(config: ExperimentConfig):
         learning_rate=config.learning_rate,
         verbose=config.verbose,
         seed=config.seed,
+        device=config.device,
     )
 
     model.set_logger(create_mlflow_logger())
@@ -73,27 +153,13 @@ def main(config: ExperimentConfig):
         name_prefix=f"ppo_{config.env_id}",
     )
 
-    # Instantiate a plotting callback for the live learning curve
-    path = (
-        local_artifacts_path
-        / "logs"
-        / f"episode_rewards_ppo_{config.env_id}_{config.seed}.csv"
-    )
-    episode_reward_callback = PlottingCallback(
-        save_path=path,
-        is_console_mode=True,
-    )
-    os.makedirs(str(path.parent), exist_ok=True)
-
     # Combine both callbacks using CallbackList
-    callback = CallbackList(
-        [checkpoint_callback, mlflow_checkpoint_callback, episode_reward_callback]
-    )
+    callback = CallbackList([checkpoint_callback, mlflow_checkpoint_callback])
 
     print("Starting training ...")
     model.learn(total_timesteps=config.total_timesteps, callback=callback)
 
 
 if __name__ == "__main__":
-    config = tyro.cli(ExperimentConfig)
+    config = tyro.extras.overridable_config_cli(presets)
     main(config)

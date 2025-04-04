@@ -1,49 +1,85 @@
-# Source code for the paper "CALF: evalution enhacement for model-free RL with stability guarantees"
+# CALF-Wrapper
+
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Implementation of the paper "Unviversal policy wrapper with guarantees".
 
 ## Overview
 
-This code is the source code for the paper "CALF: evalution enhacement for model-free RL with stability guarantees".
+CALF-Wrapper provides a universal policy wrapper with formal guarantees. The repository contains:
 
-The code is organized into the following directories:
+- Implementation of the CALF wrapper algorithm
+- Controllers for pendulum and cartpole tasks
+- Training and evaluation scripts
+- Reproduction code for paper experiments
 
-- `src`: the source code for the CALF wrapper and the experiments
-    - `callback.py`: the callback for rewards collecting
-    - `calf_wrapper.py`: the source code for the CALF wrapper
-    - `controllers`: the source code for the controllers
-        - `cartpole.py`: source code for the cartpole controller which is used for the cartpole swingup task
-        - `pendulum.py`: source code for the pendulum controller which is used for the pendulum swingup task
-    - `envs`: the source code for the environments
-        - `cartpole.py`: source code for the cartpole environment for the swingup task
-    - `utils`: the source code for the utils
-- `run`: the code for running the experiments and reproducing the results
-    - `eval.py`: the script for evaluating the experiments
-    - `train_ppo.py`: the script for training the PPO agent
-    - `scripts`: the scripts for running the experiments
-        - `eval_calf_wrapper.py`: the script for evaluating the experiments with the CALF wrapper
-        - `eval_checkpoints.py`: the script for evaluating the checkpoints without the CALF wrapper
-- `tests`: the tests for the code for the CALF wrapper and controllers
+## Project Structure
 
-## Setup
-
-clone the repo and install the dependencies via
-
-```sh
-pip install -e .
+```
+.
+├── src/                    # Core implementation
+│   ├── calf_wrapper.py    # Main CALF wrapper implementation
+│   ├── callback.py        # Reward collection callbacks
+│   ├── controllers/       # Task-specific controllers
+│   ├── envs/             # Environment implementations
+│   └── utils/            # Utility functions
+├── run/                   # Training and evaluation scripts
+│   ├── train_ppo.py      # PPO training script
+│   ├── eval.py           # Evaluation script
+│   └── scripts/          # Additional experiment scripts
+└── tests/                # Test suite
 ```
 
-## Run experiments and reproduce the results
+## Installation
 
-All the run files are in the `run` directory. Visit the directory for more information. There you will find
-the readme with the instructions for running the experiments.
+1. Install uv package manager:
+```sh
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-## Tests
+# Or follow the guide at https://docs.astral.sh/uv/getting-started/installation/
+```
 
-The tests are in the `tests` directory. Run them with
+2. Create virtual environment:
+```sh
+uv venv --python=3.13
+```
 
+3. Install dependencies:
+```sh
+uv sync
+
+# If the above fails:
+rm -rf uv.lock
+uv pip install -r pyproject.toml
+```
+
+## Usage
+
+### Training
+
+Train PPO agents on supported environments:
+```sh
+uv run run/train_ppo.py pendulum
+uv run run/train_ppo.py cartpole
+```
+
+### Evaluation
+
+Run experiments and reproduce paper results:
+```sh
+# See run/README.md for detailed instructions
+uv run run/eval.py
+```
+
+### Tests
+
+Run the test suite:
 ```sh
 pytest
 ```
 
 ## License
 
-This code is licensed under the MIT license. See the LICENSE file for more details.
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.

@@ -20,8 +20,13 @@ from typing import Optional
 @dataclass
 class MlflowConfig:
     tracking_uri: str
+    """MLflow tracking URI"""
+
     experiment_name: str
+    """MLflow experiment name"""
+
     run_name: Optional[str] = None
+    """MLflow run name"""
 
 
 class MLflowOutputFormat(KVWriter):

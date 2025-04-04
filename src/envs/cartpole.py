@@ -1,3 +1,5 @@
+# Modified from gymnasium.envs.classic_control.cartpole
+
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 from gymnasium import register
 import numpy as np
@@ -111,13 +113,11 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         if not terminated:
-            reward = np.maximum(
-                0,
-                5.0
-                - 0.5 * angle_normalize(theta) ** 2
+            reward = (
+                -0.5 * angle_normalize(theta) ** 2
                 - 0.5 * x**2
                 - 0.05 * theta_dot**2
-                - 0.05 * x_dot**2,
+                - 0.05 * x_dot**2
             )
         else:
             reward = 0.0
