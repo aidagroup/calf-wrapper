@@ -1,10 +1,13 @@
 [project]
-name = "calf-eval-wrapper"
+name = "calf-wrapper"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "antonbolychev",email = "bolychev.anthon@yandex.ru"},
-    {name = "osinenkop",email = "osinenko.pavel@yandex.ru"}
+    {name = "Anton Bolychev",email = "bolychev.anthon@yandex.ru"},
+    {name = "Georgiy Malaniya", email = "pwlsd.gm@gmail.com"},
+    {name = "Grigoriy Yaremenko", email = "grigory.yaremenko@skoltech.ru"},
+    {name = "Anastasia Krasnaya", email = "an.krasnaya@gmail.com"},
+    {name = "Pavel Osinenko",email = "osinenko.pavel@yandex.ru"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
