@@ -7,37 +7,31 @@
   <img src="gfx/logo.png" alt="CALF-Wrapper Logo" width="400">
 </p>
 
-Implementation of the paper "Unviversal policy wrapper with guarantees".
-
-
+Open-source implementation of the paper "Universal policy wrapper with guarantees".
 
 ## Overview
 
 CALF-Wrapper provides a universal policy wrapper with formal guarantees. The repository contains:
 
 - Implementation of the CALF wrapper algorithm
-- Controllers for pendulum and cartpole tasks
+- Fallback Controllers for pendulum and cartpole tasks
 - Training and evaluation scripts
-- Reproduction code for paper experiments
+- Reproduction scripts for paper experiments
 
 ## Project Structure
 
 ```
 .
-├── src/                    # Core implementation
-│   ├── calf_wrapper.py    # Main CALF wrapper implementation
-│   ├── callback.py        # Reward collection callbacks
-│   ├── controllers/       # Task-specific controllers
-│   ├── envs/             # Environment implementations
-│   └── utils/            # Utility functions
-├── run/                   # Training and evaluation scripts
+├── src/                  # Core implementation
+│   ├── calf_wrapper.py   # Main CALF wrapper implementation
+│   ├── controllers/      # Fallback controllers for pendulum and cartpole
+│   ├── envs/             # Environment implementations (CartpoleSwingupEnv)
+│   └── utils/            # Utility functions (mlflow, logging, etc.)
+├── run/                  # Training and evaluation scripts
 │   ├── train_ppo.py      # PPO training script
-│   ├── eval.py           # Evaluation script
+│   ├── eval.py           # Main evaluation script
 │   └── scripts/          # Additional experiment scripts
-└── reproduce/            # 
-    ├── cartpole
-    └── pendulum
-
+└── reproduce/            # Reproduction experiments
 ```
 
 ## Installation
@@ -64,33 +58,106 @@ rm -rf uv.lock
 uv pip install -r pyproject.toml
 ```
 
-## Usage
+## Reproducing Paper Results
 
-### Training
+The `reproduce/` directory contains evaluation scripts and configurations for reproducing the experimental results. The experiments are structured to evaluate both the base policy performance and CALF-wrapper effectiveness across different training stages.
 
-Train PPO agents on supported environments:
+### Cartpole Experiments ([`reproduce/cartpole/`](./reproduce/cartpole/))
+
+#### Experiment Structure
+- `base/`: Base policy evaluation across training stages
+  - `early.sh` - Evaluates early-stage base policy checkpoint (not fully fitted)
+  - `mid.sh` - Evaluates mid-stage training base policy checkpoint
+  - `late.sh` - Evaluates late-stage training base policy checkpoint (fully trained)
+- `calf_wrapper/`: CALF-wrapper evaluation matrix
+  - Tests 3 run modes × 3 training stages = 9 configurations
+  - Run modes:
+    - `conservative/`: Prioritizes goal reaching
+    - `balanced/`: Optimal trade-off between performance and goal reaching guarantees
+    - `brave/`: Maximizes performance while maintaining minimal goal reaching guarantees on late-stage training checkpoints.
+- `fallback.sh`: Fallback controller evaluation for CartpoleSwingupEnv
+
+#### Reproduction Steps
+
+Firstly, run training script
+
 ```sh
-uv run run/train_ppo.py pendulum
 uv run run/train_ppo.py cartpole
 ```
 
-### Evaluation
-
-Run experiments and reproduce paper results:
+Then run evaluation scripts:
 ```sh
-# See run/README.md for detailed instructions
-uv run run/eval.py
+# 1. Fallback Controller Baseline
+bash cartpole/fallback.sh
+
+# 2. Base Policy Evaluation Suite
+bash cartpole/base/early.sh
+bash cartpole/base/mid.sh
+bash cartpole/base/late.sh
+
+# 3. CALF-Wrapper Evaluation Matrix
+# Conservative mode
+bash cartpole/calf_wrapper/conservative/early.sh
+bash cartpole/calf_wrapper/conservative/mid.sh
+bash cartpole/calf_wrapper/conservative/late.sh
+
+# Balanced mode 
+bash cartpole/calf_wrapper/balanced/early.sh
+bash cartpole/calf_wrapper/balanced/mid.sh
+bash cartpole/calf_wrapper/balanced/late.sh
+
+# Brave mode
+bash cartpole/calf_wrapper/brave/early.sh
+bash cartpole/calf_wrapper/brave/mid.sh
+bash cartpole/calf_wrapper/brave/late.sh
 ```
 
-Actually we have prepared for you a list of reproducable bash scripts that fully reproduce the plots from the original paper
+### Cartpole Experiments ([`reproduce/pendulum/`](./reproduce/pendulum/))
 
-### Tests
+#### Experiment Structure
+- `base/`: Base policy evaluation across training stages
+  - `early.sh` - Evaluates early-stage base policy checkpoint (not fully fitted)
+  - `mid.sh` - Evaluates mid-stage training base policy checkpoint
+  - `late.sh` - Evaluates late-stage training base policy checkpoint (fully trained)
+- `calf_wrapper/`: CALF-wrapper evaluation matrix
+  - Tests 3 run modes × 3 training stages = 9 configurations
+  - Run modes:
+    - `conservative/`: Prioritizes goal reaching
+    - `balanced/`: Optimal trade-off between performance and goal reaching guarantees
+    - `brave/`: Maximizes performance while maintaining minimal goal reaching guarantees on late-stage training checkpoints.
+- `fallback.sh`: Fallback controller evaluation for Pendulum-v1
 
-Run the test suite:
+#### Reproduction Steps
+
+Firstly, run training script
+
 ```sh
-pytest
+uv run run/train_ppo.py pendulum
 ```
 
-## License
+Then run evalation scripts
+```sh
+# 1. Fallback Controller Baseline
+bash pendulum/fallback.sh
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+# 2. Base Policy Evaluation Suite
+bash pendulum/base/early.sh
+bash pendulum/base/mid.sh
+bash pendulum/base/late.sh
+
+# 3. CALF-Wrapper Evaluation Matrix
+# Conservative mode
+bash pendulum/calf_wrapper/conservative/early.sh
+bash pendulum/calf_wrapper/conservative/mid.sh
+bash pendulum/calf_wrapper/conservative/late.sh
+
+# Balanced mode 
+bash pendulum/calf_wrapper/balanced/early.sh
+bash pendulum/calf_wrapper/balanced/mid.sh
+bash pendulum/calf_wrapper/balanced/late.sh
+
+# Brave mode
+bash pendulum/calf_wrapper/brave/early.sh
+bash pendulum/calf_wrapper/brave/mid.sh
+bash pendulum/calf_wrapper/brave/late.sh
+```

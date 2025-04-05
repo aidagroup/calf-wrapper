@@ -1,3 +1,5 @@
+# Main training script
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,8 +11,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList
 from stable_baselines3.common.env_util import make_vec_env
 
 from src.utils.mlflow import MlflowConfig, mlflow_monitoring, create_mlflow_logger
-
-current_dir = Path(__file__).parent
+from src import run_path
 
 
 @dataclass
@@ -19,13 +20,13 @@ class ExperimentConfig:
 
     mlflow: MlflowConfig = field(
         default_factory=lambda: MlflowConfig(
-            tracking_uri="file://" + os.path.join(str(current_dir), "mlruns"),
-            experiment_name=current_dir.name,
+            tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+            experiment_name=run_path.name,
         )
     )
     """MLflow configuration for experiment tracking"""
 
-    local_artifacts_path: Path = current_dir / "artifacts"
+    local_artifacts_path: Path = run_path / "artifacts"
     """Path to store local training artifacts like model checkpoints and logs"""
 
     env_id: str = "Pendulum-v1"
