@@ -161,3 +161,38 @@ bash pendulum/calf_wrapper/brave/early.sh
 bash pendulum/calf_wrapper/brave/mid.sh
 bash pendulum/calf_wrapper/brave/late.sh
 ```
+
+## Mlflow
+
+All the scripts above log their results into mlflow which can be hosted via
+
+```sh
+cd run
+uv run mlflow ui --port 5000
+```
+
+And then visit [http://localhost:5000](http://localhost:5000) to see the logged results.
+
+## Experiment Tracking
+
+We use [MLflow](https://mlflow.org/) for comprehensive experiment tracking and results visualization. MLflow tracks:
+- Training metrics (loss, rewards, episode lengths)
+- Evaluation metrics (goal reaching rates, etc.)
+- Environment parameters
+- Run configurations and hyperparameters
+
+### Viewing Results
+
+Launch MLflow UI server:
+```sh
+cd run
+uv run mlflow ui --port 5000
+```
+
+Access the dashboard at [http://localhost:5000](http://localhost:5000) to:
+- Compare runs across different modes and stages
+- View training/evaluation curves
+- Analyze metrics distribution
+- Export results for paper plots
+
+For MLflow usage details, refer to their [documentation](https://mlflow.org/docs/latest/index.html).
