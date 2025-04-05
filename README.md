@@ -112,7 +112,7 @@ bash cartpole/calf_wrapper/brave/mid.sh
 bash cartpole/calf_wrapper/brave/late.sh
 ```
 
-### Cartpole Experiments ([`reproduce/pendulum/`](./reproduce/pendulum/))
+### Pendulum Experiments ([`reproduce/pendulum/`](./reproduce/pendulum/))
 
 #### Experiment Structure
 - `base/`: Base policy evaluation across training stages
