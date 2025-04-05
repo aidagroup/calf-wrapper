@@ -88,28 +88,28 @@ uv run run/train_ppo.py cartpole
 Then run evaluation scripts:
 ```sh
 # 1. Fallback Controller Baseline
-bash cartpole/fallback.sh
+bash reproduce/cartpole/fallback.sh
 
 # 2. Base Policy Evaluation Suite
-bash cartpole/base/early.sh
-bash cartpole/base/mid.sh
-bash cartpole/base/late.sh
+bash reproduce/cartpole/base/early.sh
+bash reproduce/cartpole/base/mid.sh
+bash reproduce/cartpole/base/late.sh
 
 # 3. CALF-Wrapper Evaluation Matrix
 # Conservative mode
-bash cartpole/calf_wrapper/conservative/early.sh
-bash cartpole/calf_wrapper/conservative/mid.sh
-bash cartpole/calf_wrapper/conservative/late.sh
+bash reproduce/cartpole/calf_wrapper/conservative/early.sh
+bash reproduce/cartpole/calf_wrapper/conservative/mid.sh
+bash reproduce/cartpole/calf_wrapper/conservative/late.sh
 
 # Balanced mode 
-bash cartpole/calf_wrapper/balanced/early.sh
-bash cartpole/calf_wrapper/balanced/mid.sh
-bash cartpole/calf_wrapper/balanced/late.sh
+bash reproduce/cartpole/calf_wrapper/balanced/early.sh
+bash reproduce/cartpole/calf_wrapper/balanced/mid.sh
+bash reproduce/cartpole/calf_wrapper/balanced/late.sh
 
 # Brave mode
-bash cartpole/calf_wrapper/brave/early.sh
-bash cartpole/calf_wrapper/brave/mid.sh
-bash cartpole/calf_wrapper/brave/late.sh
+bash reproduce/cartpole/calf_wrapper/brave/early.sh
+bash reproduce/cartpole/calf_wrapper/brave/mid.sh
+bash reproduce/cartpole/calf_wrapper/brave/late.sh
 ```
 
 ### Pendulum Experiments ([`reproduce/pendulum/`](./reproduce/pendulum/))
@@ -138,28 +138,28 @@ uv run run/train_ppo.py pendulum
 Then run evalation scripts
 ```sh
 # 1. Fallback Controller Baseline
-bash pendulum/fallback.sh
+bash reproduce/pendulum/fallback.sh
 
 # 2. Base Policy Evaluation Suite
-bash pendulum/base/early.sh
-bash pendulum/base/mid.sh
-bash pendulum/base/late.sh
+bash reproduce/pendulum/base/early.sh
+bash reproduce/pendulum/base/mid.sh
+bash reproduce/pendulum/base/late.sh
 
 # 3. CALF-Wrapper Evaluation Matrix
 # Conservative mode
-bash pendulum/calf_wrapper/conservative/early.sh
-bash pendulum/calf_wrapper/conservative/mid.sh
-bash pendulum/calf_wrapper/conservative/late.sh
+bash reproduce/pendulum/calf_wrapper/conservative/early.sh
+bash reproduce/pendulum/calf_wrapper/conservative/mid.sh
+bash reproduce/pendulum/calf_wrapper/conservative/late.sh
 
 # Balanced mode 
-bash pendulum/calf_wrapper/balanced/early.sh
-bash pendulum/calf_wrapper/balanced/mid.sh
-bash pendulum/calf_wrapper/balanced/late.sh
+bash reproduce/pendulum/calf_wrapper/balanced/early.sh
+bash reproduce/pendulum/calf_wrapper/balanced/mid.sh
+bash reproduce/pendulum/calf_wrapper/balanced/late.sh
 
 # Brave mode
-bash pendulum/calf_wrapper/brave/early.sh
-bash pendulum/calf_wrapper/brave/mid.sh
-bash pendulum/calf_wrapper/brave/late.sh
+bash reproduce/pendulum/calf_wrapper/brave/early.sh
+bash reproduce/pendulum/calf_wrapper/brave/mid.sh
+bash reproduce/pendulum/calf_wrapper/brave/late.sh
 ```
 
 ## Mlflow
