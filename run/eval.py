@@ -106,7 +106,7 @@ presets = {
             / "artifacts"
             / "ppo_Pendulum-v1_9"
             / "checkpoints"
-            / "ppo_checkpoint_301056_steps.zip",
+            / "ppo_checkpoint_102000_steps.zip",
             device="cpu",
             deterministic=True,
             stabilizing_policy=EnergyBasedStabilizingPolicy(
@@ -137,7 +137,7 @@ presets = {
             / "artifacts"
             / "ppo_CartpoleSwingupEnv-v0_42"
             / "checkpoints"
-            / "ppo_checkpoint_3000_steps.zip",
+            / "ppo_checkpoint_270000_steps.zip",
             device="cpu",
             deterministic=True,
             stabilizing_policy=CartpoleEnergyBasedStabilizingPolicy(
@@ -178,6 +178,29 @@ def run_episode(
         )
         obs = next_obs
     return data
+
+
+def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
+    if env_id == "Pendulum-v1":
+        return (
+            np.prod(
+                np.abs(latest_obs - np.array([[1, 0, 0]]))
+                < np.array([[0.05, 0.05, 0.3]]),
+                axis=1,
+            ).mean()
+            * 100
+        )
+    elif env_id == "CartpoleSwingupEnvLong-v0":
+        return (
+            np.prod(
+                np.abs(latest_obs - np.array([[0, 0, 1, 0, 0]]))
+                < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
+                axis=1,
+            ).mean()
+            * 100
+        )
+    else:
+        raise ValueError(f"Unknown environment: {env_id}")
 
 
 @mlflow_monitoring()
@@ -223,15 +246,12 @@ def main(config: EvalConfig):
             json.dump(data, f, cls=NumpyEncoder)
         mlflow.log_artifact(str(tmp_filepath), "episode_data")
     metrics = {
-        "mean_reward": np.mean(final_rewards),
-        "std_reward": np.std(final_rewards),
-        "median_reward": np.median(final_rewards),
-        "q1_reward": np.quantile(final_rewards, 0.25),
-        "q3_reward": np.quantile(final_rewards, 0.75),
-        "min_reward": np.min(final_rewards),
-        "max_reward": np.max(final_rewards),
+        "mean_reward": float(np.mean(final_rewards)),
+        "std_reward": float(np.std(final_rewards)),
+        "goal_reaching_rate": float(
+            goal_reaching_rate(env_id=config.env_id, latest_obs=data[-1]["obs"])
+        ),
     }
-    print(np.round(data[-1]["obs"], 2))
     mlflow.log_metrics(metrics)
 
     from pprint import pprint

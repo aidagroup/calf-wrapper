@@ -1,4 +1,4 @@
 uv run run/eval.py pendulum \
 --eval_mode calf_wrapper \
 --model_path run/artifacts/ppo_Pendulum-v1_9/checkpoints/ppo_checkpoint_36000_steps.zip \
---relaxprob_init 0.0
+--calf.relaxprob_init 0.0
