@@ -30,6 +30,7 @@ dependencies = [
     "ipykernel>=6.29.5",
     "scienceplots>=2.1.1",
     "moviepy>=2.1.2",
+    "black>=25.1.0",
 ]
 
 [tool.poetry]

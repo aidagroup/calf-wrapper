@@ -38,7 +38,7 @@ The repository contains:
 │   └── utils/            # Utility functions (mlflow, logging, etc.)
 ├── run/                  # Training and evaluation scripts
 │   ├── train_ppo.py      # PPO training script
-│   ├── eval.py           # Main evaluation script
+│   ├── eval.py           # Main evaluation cli-script
 │   └── scripts/          # Additional experiment scripts
 └── reproduce/            # Reproduction experiments
 ```
@@ -69,7 +69,13 @@ uv pip install -r pyproject.toml
 
 ## Reproducing Paper Results
 
-The `reproduce/` directory contains evaluation scripts and configurations for reproducing the experimental results. The experiments are structured to evaluate both the base policy performance and CALF-wrapper effectiveness across different training stages.
+The [`reproduce/`](./reproduce/) directory contains evaluation bash-scripts for reproducing the experimental results. The experiments are structured to evaluate both the base policy performance and CALF-wrapper effectiveness across different training stages.
+
+> **Note:** 
+> - All scripts in the [`reproduce/`](./reproduce/)  directory execute the main evaluation CLI tool [`run/eval.py`](./run/eval.py)
+> - You can run evaluations directly with `uv run run/eval.py [ARGS]` using parameters from the bash scripts
+> - For visualization, add the `--record-video` flag to any evaluation command to generate MP4 recordings
+> - Additional CLI options can be found by running `uv run run/eval.py --help`
 
 ### Cartpole Experiments ([`reproduce/cartpole/`](./reproduce/cartpole/))
 
@@ -144,7 +150,7 @@ Firstly, run training script
 uv run run/train_ppo.py pendulum
 ```
 
-Then run evalation scripts
+Then run evaluation scripts
 ```sh
 # 1. Fallback Controller Baseline
 bash reproduce/pendulum/fallback.sh

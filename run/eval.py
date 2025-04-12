@@ -88,7 +88,7 @@ class EvalConfig:
     seed: int = 42
     """Random seed for reproducibility"""
 
-    record_video: bool = True
+    record_video: bool = False
     """Whether to save a video of the evaluation"""
 
     video_folder: Path = run_path / "artifacts" / "videos"
@@ -235,6 +235,17 @@ def make_env(
 
 @mlflow_monitoring()
 def main(config: EvalConfig):
+    if config.record_video:
+        video_folder = config.video_folder / (
+            config.mlflow.experiment_name
+            + "_"
+            + (
+                config.mlflow.run_name
+                if config.mlflow.run_name is not None
+                else config.env_id + "_" + config.eval_mode + "_" + str(config.seed)
+            )
+        )
+
     env = DummyVecEnv(
         [
             make_env(
@@ -243,11 +254,7 @@ def main(config: EvalConfig):
                 config.seed,
                 wrapper_class=RecordVideo if config.record_video else None,
                 wrapper_kwargs=(
-                    {
-                        "video_folder": config.video_folder
-                        / (config.mlflow.experiment_name + "_" + config.mlflow.run_name)
-                        / f"env_{rank}"
-                    }
+                    {"video_folder": video_folder / f"env_{rank:03d}"}
                     if config.record_video
                     else None
                 ),
@@ -295,6 +302,10 @@ def main(config: EvalConfig):
         with open(tmp_filepath, "w") as f:
             json.dump(data, f, cls=NumpyEncoder)
         mlflow.log_artifact(str(tmp_filepath), "episode_data")
+
+    if config.record_video:
+        mlflow.log_artifact(video_folder, "video")
+
     metrics = {
         "mean_reward": float(np.mean(final_rewards)),
         "std_reward": float(np.std(final_rewards)),

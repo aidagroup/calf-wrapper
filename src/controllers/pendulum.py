@@ -58,4 +58,3 @@ class EnergyBasedStabilizingPolicy(Controller):
         )
 
         return action
-
