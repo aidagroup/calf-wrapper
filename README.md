@@ -11,7 +11,16 @@ Open-source implementation of the paper "Universal policy wrapper with guarantee
 
 ## Overview
 
-CALF-Wrapper provides a universal policy wrapper with formal guarantees. The repository contains:
+CALF-Wrapper is a runtime policy wrapper that enhances high-performance RL-trained policies (referred to as base policies). While classical RL methods can achieve impressive performance, they typically lack theoretical goal-reaching guarantees. By combining the base policy with a fallback policy (which can be any policy with goal-reaching capabilities, regardless of reward optimality), CALF-Wrapper produces a fused policy that maintains high performance while ensuring formal goal-reaching guarantees.
+
+<p align="center">
+  <em>Example with Cartpole Environment: The fallback policy successfully swings up the pole and centers the cart, but does so sub-optimally. The base policy effectively swings up the pole but fails to center the cart, lacking goal-reaching capabilities. CALF-Wrapper combines these policies to achieve both optimal performance and goal-reaching guarantees.</em>
+</p>
+<p align="center">
+  <img src="gfx/cartpole.gif" alt="CALF-Wrapper Cartpole Example" width="400">
+</p>
+
+The repository contains:
 
 - Implementation of the CALF wrapper algorithm
 - Fallback Controllers for pendulum and cartpole tasks

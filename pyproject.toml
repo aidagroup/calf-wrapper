@@ -29,6 +29,7 @@ dependencies = [
     "loguru>=0.7.3",
     "ipykernel>=6.29.5",
     "scienceplots>=2.1.1",
+    "moviepy>=2.1.2",
 ]
 
 [tool.poetry]

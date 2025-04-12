@@ -11,8 +11,12 @@ import tempfile
 import json
 import tyro
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 from stable_baselines3 import PPO
 
+from gymnasium.wrappers.record_video import RecordVideo
 from src.calf_wrapper import CALFWrapper
 from src.utils.mlflow import mlflow_monitoring, MlflowConfig
 from src.controllers.pendulum import EnergyBasedStabilizingPolicy
@@ -83,6 +87,12 @@ class EvalConfig:
 
     seed: int = 42
     """Random seed for reproducibility"""
+
+    record_video: bool = True
+    """Whether to save a video of the evaluation"""
+
+    video_folder: Path = run_path / "artifacts" / "videos"
+    """Path to the folder where the video will be saved"""
 
 
 presets = {
@@ -160,14 +170,14 @@ presets = {
 
 def run_episode(
     get_action: Callable[[np.ndarray], np.ndarray],
-    env: gym.Env,
+    env: VecEnv,
     n_steps: int,
 ) -> list[dict[str, Any]]:
     obs = env.reset()
     data = []
-    for step in range(n_steps):
+    for step in range(n_steps - 1):
         action = get_action(obs)
-        next_obs, reward, is_done, info = env.step(action)
+        next_obs, reward, is_done, info = env.step(np.array(action, dtype=float))
         data.append(
             {
                 "step": step,
@@ -179,6 +189,7 @@ def run_episode(
             }
         )
         obs = next_obs
+    env.close()
     return data
 
 
@@ -205,9 +216,46 @@ def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
         raise ValueError(f"Unknown environment: {env_id}")
 
 
+def make_env(
+    env_id: str,
+    rank: int,
+    seed: int,
+    wrapper_class: Callable[[gym.Env], gym.Env],
+    wrapper_kwargs: dict[str, Any],
+) -> Callable[[], gym.Env]:
+    def _init() -> gym.Env:
+        env = gym.make(env_id, render_mode="rgb_array")
+        env.action_space.seed(seed + rank)
+        if wrapper_class is not None:
+            env = wrapper_class(env, **wrapper_kwargs)
+        return env
+
+    return _init
+
+
 @mlflow_monitoring()
 def main(config: EvalConfig):
-    env = make_vec_env(config.env_id, n_envs=config.n_envs, seed=config.seed)
+    env = DummyVecEnv(
+        [
+            make_env(
+                config.env_id,
+                rank,
+                config.seed,
+                wrapper_class=RecordVideo if config.record_video else None,
+                wrapper_kwargs=(
+                    {
+                        "video_folder": config.video_folder
+                        / (config.mlflow.experiment_name + "_" + config.mlflow.run_name)
+                        / f"env_{rank}"
+                    }
+                    if config.record_video
+                    else None
+                ),
+            )
+            for rank in range(config.n_envs)
+        ]
+    )
+    env.seed(config.seed)
 
     if config.eval_mode == "fallback":
         data = run_episode(config.stabilizing_policy.get_action, env, config.n_steps)
