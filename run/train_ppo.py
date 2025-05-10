@@ -13,6 +13,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from src.utils.mlflow import MlflowConfig, mlflow_monitoring, create_mlflow_logger
 from src import run_path
 
+current_dir = Path(__file__).parent
 
 @dataclass
 class ExperimentConfig:
