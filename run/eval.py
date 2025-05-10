@@ -25,6 +25,7 @@ from src.controllers.controller import Controller
 from src.utils import NumpyEncoder
 from src import run_path
 
+current_dir = Path(__file__).parent
 
 @dataclass
 class CalfConfig:
