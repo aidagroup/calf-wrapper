@@ -25,6 +25,10 @@ from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
 from src.controllers.controller import Controller
 from src.utils import NumpyEncoder
 from src import run_path
+from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalController
+from src.controllers.underwaterdrone import UnderwaterDroneNominalController
+from src.envs.underwaterdrone import HOLE_WIDTH, TOP_Y
+from src.models.cleanrl_td3 import CleanRLTD3
 
 
 @dataclass
@@ -66,6 +70,9 @@ class EvalConfig:
 
     deterministic: bool
     """Whether to use deterministic action selection during evaluation"""
+
+    algorithm: Literal["ppo", "cleanrl_td3"]
+    """Base-policy algorithm used to load the checkpoint"""
 
     stabilizing_policy: Controller
     """Stabilizing controller configuration for safety-critical control"""
@@ -125,6 +132,7 @@ presets = {
             / "ppo_checkpoint_102000_steps.zip",
             device="cpu",
             deterministic=True,
+            algorithm="ppo",
             stabilizing_policy=EnergyBasedStabilizingPolicy(
                 gain=0.6,
                 action_min=-2,
@@ -156,6 +164,7 @@ presets = {
             / "ppo_checkpoint_270000_steps.zip",
             device="cpu",
             deterministic=True,
+            algorithm="ppo",
             stabilizing_policy=CartpoleEnergyBasedStabilizingPolicy(
                 pd_coefs=[70, 10.0, 20.0, 10.0],
                 gain=0.3,
@@ -167,6 +176,54 @@ presets = {
             seed=42,
             n_envs=30,
             calf=CalfConfig(),
+        ),
+    ),
+    "underwater-drone": (
+        "Underwater-drone TD3 configuration",
+        EvalConfig(
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+                experiment_name="eval/underwater-drone",
+            ),
+            env_id="UnderwaterDrone-v0",
+            model_path=run_path
+            / "artifacts"
+            / "td3_UnderwaterDrone-v0_0"
+            / "checkpoints"
+            / "td3_checkpoint_3000000_steps.pt",
+            device="cpu",
+            deterministic=True,
+            algorithm="cleanrl_td3",
+            stabilizing_policy=UnderwaterDroneNominalController(),
+            eval_mode="fallback",
+            calf=CalfConfig(),
+            seed=42,
+            n_envs=30,
+            n_steps=1500,
+        ),
+    ),
+    "robot-navigation": (
+        "Robot-navigation TD3 configuration",
+        EvalConfig(
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+                experiment_name="eval/robot-navigation",
+            ),
+            env_id="RobotNavigationConstSpeedCatch-v0",
+            model_path=run_path
+            / "artifacts"
+            / "td3_RobotNavigationConstSpeedCatch-v0_1"
+            / "checkpoints"
+            / "td3_checkpoint_3000000_steps.pt",
+            device="cpu",
+            deterministic=True,
+            algorithm="cleanrl_td3",
+            stabilizing_policy=RobotNavigationConstSpeedGoalController(),
+            eval_mode="fallback",
+            calf=CalfConfig(),
+            seed=42,
+            n_envs=30,
+            n_steps=1000,
         ),
     ),
 }
@@ -209,12 +266,35 @@ def goal_reaching_mask(env_id: str, latest_obs: np.ndarray) -> np.ndarray:
             < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
             axis=1,
         )
+    elif env_id == "UnderwaterDrone-v0":
+        return (latest_obs[:, 1] >= TOP_Y) & (
+            np.abs(latest_obs[:, 0]) <= HOLE_WIDTH / 2.0
+        )
+    elif env_id == "RobotNavigationConstSpeedCatch-v0":
+        return np.linalg.norm(latest_obs[:, 0:2] - latest_obs[:, 4:6], axis=1) <= 0.05
     else:
         raise ValueError(f"Unknown environment: {env_id}")
 
 
 def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
     return float(np.mean(goal_reaching_mask(env_id, latest_obs)) * 100)
+
+
+def trial_successes(env_id: str, data: list[dict[str, Any]]) -> np.ndarray:
+    """Return whether each fixed-horizon trial reached its goal at least once."""
+
+    successes = goal_reaching_mask(env_id, data[-1]["obs"])
+    info_key = {
+        "UnderwaterDrone-v0": "is_in_hole",
+        "RobotNavigationConstSpeedCatch-v0": "goal_reached",
+    }.get(env_id)
+    if info_key is None:
+        return successes
+
+    for item in data:
+        for trial, info in enumerate(item["info"]):
+            successes[trial] |= bool(info.get(info_key, False))
+    return successes
 
 
 def make_env(
@@ -232,6 +312,12 @@ def make_env(
         return env
 
     return _init
+
+
+def load_model(config: EvalConfig):
+    if config.algorithm == "ppo":
+        return PPO.load(config.model_path, device=config.device, seed=config.seed)
+    return CleanRLTD3.load(config.model_path, device=config.device)
 
 
 @mlflow_monitoring()
@@ -268,14 +354,14 @@ def main(config: EvalConfig):
     if config.eval_mode == "fallback":
         data = run_episode(config.stabilizing_policy.get_action, env, config.n_steps)
     elif config.eval_mode == "base":
-        model = PPO.load(config.model_path, device=config.device, seed=config.seed)
+        model = load_model(config)
         data = run_episode(
             lambda obs: model.predict(obs, deterministic=config.deterministic)[0],
             env,
             config.n_steps,
         )
     elif config.eval_mode == "calf_wrapper":
-        model = PPO.load(config.model_path, device=config.device, seed=config.seed)
+        model = load_model(config)
         env = CALFWrapper(
             env,
             model,
@@ -298,8 +384,7 @@ def main(config: EvalConfig):
     final_rewards = np.vstack([item["reward"] for item in data]).sum(axis=0)
     for i, reward in enumerate(final_rewards):
         mlflow.log_metric("reward", reward, step=i)
-    latest_obs = data[-1]["obs"]
-    successes = goal_reaching_mask(config.env_id, latest_obs)
+    successes = trial_successes(config.env_id, data)
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_filepath = Path(tmp_dir) / f"episode_data.json"
         with open(tmp_filepath, "w") as f:

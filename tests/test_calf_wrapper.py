@@ -4,7 +4,7 @@ import pytest
 from stable_baselines3.common.env_util import make_vec_env
 from src.calf_wrapper import CALFWrapper
 from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, TD3
 
 
 @pytest.fixture
@@ -115,3 +115,29 @@ def test_calf_wrapper_vec_env(base_policy, stabilizing_policy):
             cur_best_value,
         )
         assert np.allclose(cur_best_value, best_values[i].reshape(-1))
+
+
+def test_calf_wrapper_supports_td3_critic(stabilizing_policy):
+    model = TD3(
+        "MlpPolicy",
+        "CartpoleSwingupEnvLong-v0",
+        device="cpu",
+        seed=42,
+        buffer_size=100,
+        learning_starts=10,
+    )
+    env = CALFWrapper(
+        make_vec_env("CartpoleSwingupEnvLong-v0", n_envs=2, seed=42),
+        model=model,
+        stabilizing_policy=stabilizing_policy,
+        seed=42,
+    )
+    obs = env.reset()
+    values = env.value(obs)
+    action = model.predict(obs, deterministic=True)[0]
+    next_obs, _, _, infos = env.step(action)
+
+    assert values.shape == (2, 1)
+    assert next_obs.shape == obs.shape
+    assert all("calf.base_action_applied" in info for info in infos)
+    env.close()

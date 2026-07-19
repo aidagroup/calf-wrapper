@@ -23,9 +23,18 @@ CALF-Wrapper is a runtime policy wrapper that enhances high-performance RL-train
 The repository contains:
 
 - Implementation of the CALF wrapper algorithm
-- Fallback Controllers for pendulum and cartpole tasks
+- Fallback controllers for pendulum, cartpole, underwater-drone, and robot-navigation tasks
 - Training and evaluation scripts
 - Reproduction scripts for paper experiments
+
+The `UnderwaterDrone-v0` and `RobotNavigationConstSpeedCatch-v0`
+environments are synchronized from
+`aidagroup/calf-enhance@afb5edc49427054c99d6fbfe87b603d126724eb8` so the
+new TD3 experiments use exactly the same task definitions as CALF-Enhance.
+The required CALF-Enhance TD3 source tree is copied into
+`vendor/calf-enhance-td3` at that revision. Its own `uv.lock` provides an
+isolated runtime for exact CleanRL TD3 reproduction without changing the PPO
+environment. No second repository or submodule checkout is required.
 
 ## Project Structure
 
@@ -38,8 +47,11 @@ The repository contains:
 │   └── utils/            # Utility functions (mlflow, logging, etc.)
 ├── run/                  # Training and evaluation scripts
 │   ├── train_ppo.py      # PPO training script
+│   ├── train_td3.py      # Vendored CALF-Enhance TD3 launcher
 │   ├── eval.py           # Main evaluation cli-script
 │   └── scripts/          # Additional experiment scripts
+├── vendor/
+│   └── calf-enhance-td3/ # Copied, independently locked TD3 runtime
 └── reproduce/            # Reproduction experiments
 ```
 
@@ -70,6 +82,56 @@ uv pip install -r pyproject.toml
 ## Reproducing Paper Results
 
 The [`reproduce/`](./reproduce/) directory contains evaluation bash-scripts for reproducing the experimental results. The experiments are structured to evaluate both the base policy performance and CALF-wrapper effectiveness across different training stages.
+
+## Reproducing CALF-Enhance TD3
+
+`run/train_td3.py` delegates to the copied CleanRL trainer and locked
+environment from the pinned CALF-Enhance commit. The copied trainer additionally
+saves periodic and final model checkpoints locally and uploads them to the
+MLflow run under `checkpoints/`. This command runs the first
+50,000 steps of the historical robot seed-1 run and checks every deterministic
+MLflow metric against the original run:
+
+```sh
+uv run python run/train_td3.py robot-navigation \
+  --seed 1 \
+  --device cuda:1 \
+  --total-timesteps 50000 \
+  --learning-starts 25000 \
+  --tracking-uri http://127.0.0.1:5001 \
+  --experiment-name calf-wrapper/td3-enhance-reproduction \
+  --run-name robot_seed1_exact_50k \
+  --checkpoint-every 10000 \
+  --reference-tracking-uri http://127.0.0.1:5000 \
+  --reference-run-id 89aca0e282ec4363bf29c1679b71f01b \
+  --comparison-report reports/results/td3-enhance/robot-seed1-50k.json
+```
+
+The checkpoint contains actor and critic weights, target networks, optimizer
+states, the current observation, and random-number-generator states. Replay
+buffer contents and simulator internals are intentionally not serialized, so
+the file is suitable for evaluation and model provenance but is not an exact
+mid-episode training-resume snapshot.
+
+`run/eval.py` loads these `.pt` files through the inference-only
+`CleanRLTD3` adapter for base-policy and CALF-wrapper evaluation.
+
+The full experimental matrix uses ten seeds per environment and distributes
+the resulting 20 jobs round-robin over the requested GPUs. Preview it first:
+
+```sh
+uv run python scripts/run_td3_matrix.py \
+  --tracking-uri http://127.0.0.1:5001 \
+  --gpus 0,1 \
+  --dry-run
+```
+
+Remove `--dry-run` only from a clean pushed commit. The launcher creates one
+detached `tmux` queue per GPU, so each GPU executes one run at a time while the
+assigned seeds proceed sequentially. Every job writes a separate local log
+under `run/logs/` and logs parameters, metrics, and trajectories to MLflow.
+Use `--smoke --seeds 0` to validate the exact first 1,000-step execution prefix
+for both environments before the full matrix.
 
 > **Note:** 
 > - All scripts in the [`reproduce/`](./reproduce/)  directory execute the main evaluation CLI tool [`run/eval.py`](./run/eval.py)

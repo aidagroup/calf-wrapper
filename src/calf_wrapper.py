@@ -2,16 +2,15 @@ from gymnasium import Wrapper
 import numpy as np
 import torch
 from stable_baselines3.common.vec_env import VecEnv
-from stable_baselines3 import PPO
 from src.controllers.controller import Controller
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 
 class CALFWrapper(Wrapper):
     def __init__(
         self,
         env: VecEnv,
-        model: PPO,
+        model: Any,
         stabilizing_policy: Controller,
         calf_change_rate=0.01,
         relaxprob_init=0.5,
@@ -29,17 +28,32 @@ class CALFWrapper(Wrapper):
 
     def value(self, obs: np.ndarray) -> Union[float, np.ndarray]:
         with torch.no_grad():
-            if obs.ndim == 1:
-                tensor_obs = torch.tensor(obs.reshape(1, -1), device=self.model.device)
+            is_single = obs.ndim == 1
+            batch = obs.reshape(1, -1) if is_single else obs
+            tensor_obs = torch.as_tensor(
+                batch, dtype=torch.float32, device=self.model.device
+            )
+
+            policy = getattr(self.model, "policy", None)
+            if policy is not None and hasattr(policy, "predict_values"):
+                values = policy.predict_values(tensor_obs)
+            elif hasattr(self.model, "actor") and hasattr(self.model, "critic"):
+                actions = self.model.actor(tensor_obs)
+                critic_values = self.model.critic(tensor_obs, actions)
+                values = torch.min(
+                    torch.cat(critic_values, dim=1), dim=1, keepdim=True
+                )[0]
             else:
-                tensor_obs = torch.tensor(obs, device=self.model.device)
+                raise TypeError(
+                    "CALFWrapper requires either a state-value policy or an "
+                    "actor with twin action-value critics"
+                )
 
-            values = self.model.policy.predict_values(tensor_obs).cpu().numpy()
+            values = values.cpu().numpy()
 
-            if obs.ndim == 1:
+            if is_single:
                 return values[0][0]
-            else:
-                return values
+            return values
 
     def step(self, base_action: np.ndarray):
         value = self.value(self.obs)
