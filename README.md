@@ -225,6 +225,9 @@ in [`publication/README.md`](publication/README.md).
 The export contains `runs.csv` (one aggregate row per selected run),
 `trials.csv` (all 30 individual trials per run), per-environment plotting JSON,
 and a provenance sidecar identifying any imported plot-only baseline.
+The completed local/remote audit, exact replay verdicts, fresh-training results,
+run IDs, and artifact hashes are in
+[`reports/reproducibility.md`](reports/reproducibility.md).
 
 ## Experiment Tracking
 
