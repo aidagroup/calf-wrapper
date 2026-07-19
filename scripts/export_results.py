@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -82,9 +83,11 @@ def main() -> None:
     parser.add_argument("--experiment-prefix", default="calf-wrapper/reproduction")
     args = parser.parse_args()
     mlflow.set_tracking_uri(args.tracking_uri)
+    client = mlflow.tracking.MlflowClient()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     raw_rows = []
+    trial_rows = []
     for env_name in STAGES:
         experiment_name = f"{args.experiment_prefix}/eval/{env_name}"
         runs = completed_runs(experiment_name)
@@ -112,6 +115,22 @@ def main() -> None:
                 {f"metric.{key}": value for key, value in run.data.metrics.items()}
             )
             raw_rows.append(row)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                trial_path = client.download_artifacts(
+                    run.info.run_id, "raw/trial_metrics.csv", temp_dir
+                )
+                with Path(trial_path).open(newline="", encoding="utf-8") as source:
+                    for trial in csv.DictReader(source):
+                        trial_rows.append(
+                            {
+                                "environment": env_name,
+                                "run_name": run_name,
+                                "run_id": run.info.run_id,
+                                "trial": int(trial["trial"]),
+                                "reward": float(trial["reward"]),
+                                "goal_reached": trial["goal_reached"].lower() == "true",
+                            }
+                        )
 
     columns = sorted({column for row in raw_rows for column in row})
     with (args.output_dir / "runs.csv").open(
@@ -120,6 +139,40 @@ def main() -> None:
         writer = csv.DictWriter(output, fieldnames=columns)
         writer.writeheader()
         writer.writerows(raw_rows)
+
+    with (args.output_dir / "trials.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as output:
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "environment",
+                "run_name",
+                "run_id",
+                "trial",
+                "reward",
+                "goal_reached",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(trial_rows)
+
+    provenance = {
+        "experiment_prefix": args.experiment_prefix,
+        "tracking_uri": args.tracking_uri,
+        "selected_run_policy": "latest completed run per MLflow run name",
+        "reference_only_methods": {},
+    }
+    if args.reference_dir:
+        provenance["reference_only_methods"] = {
+            "residual": (
+                "Copied from the archived plotting JSON. CALF-Wrapper does not "
+                "contain the Residual RL implementation or checkpoints."
+            )
+        }
+    (args.output_dir / "provenance.json").write_text(
+        json.dumps(provenance, indent=2), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

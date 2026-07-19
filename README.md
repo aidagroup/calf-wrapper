@@ -222,6 +222,9 @@ uv run python scripts/compare_results.py \
 
 The plotting environment and byte-for-byte PDF reproduction instructions are
 in [`publication/README.md`](publication/README.md).
+The export contains `runs.csv` (one aggregate row per selected run),
+`trials.csv` (all 30 individual trials per run), per-environment plotting JSON,
+and a provenance sidecar identifying any imported plot-only baseline.
 
 ## Experiment Tracking
 

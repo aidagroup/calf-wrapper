@@ -1,11 +1,12 @@
-import matplotlib.pyplot as plt
-import scienceplots
+import argparse
 import json
-import numpy as np
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
 import os
 import time
+from datetime import datetime
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import scienceplots
 
 os.environ["TZ"] = "Europe/Moscow"
 time.tzset()
@@ -14,18 +15,17 @@ plt.style.use("science")
 plt.rcParams["font.size"] = 28
 plt.rcParams["grid.linewidth"] = 2.5  # Width of lines in legend
 
-data_path = Path(__file__).parent.parent / "reference-results"
 
-with open(data_path / "pendulum.json", "r") as f:
-    pendulum_data = json.load(f)
-
-with open(data_path / "cartpole.json", "r") as f:
-    cartpole_data = json.load(f)
-
-Path("images").mkdir(exist_ok=True)
-
-
-def plot(data, ylim, yticks, ylabel, delta_goal_reaching_rate, output_name, scale=1.0, creation_date=None):
+def plot(
+    data,
+    ylim,
+    yticks,
+    ylabel,
+    delta_goal_reaching_rate,
+    output_path,
+    scale=1.0,
+    creation_date=None,
+):
     early = data["stages"]["early"]
     mid = data["stages"]["mid"]
     late = data["stages"]["late"]
@@ -74,7 +74,9 @@ def plot(data, ylim, yticks, ylabel, delta_goal_reaching_rate, output_name, scal
         )
         ax.plot([2], [data[step]["brave"]["mean_reward"]], "ko", markersize=marker_size)
         ax.plot([3], [data[step]["base"]["mean_reward"]], "ko", markersize=marker_size)
-        ax.plot([4], [data[step]["residual"]["mean_reward"]], "ko", markersize=marker_size)
+        ax.plot(
+            [4], [data[step]["residual"]["mean_reward"]], "ko", markersize=marker_size
+        )
         ax.plot([5], [fallback_cartpole["mean_reward"]], "ko", markersize=marker_size)
 
         ax.bar(
@@ -116,7 +118,8 @@ def plot(data, ylim, yticks, ylabel, delta_goal_reaching_rate, output_name, scal
         ax.bar(
             [4],
             2 * data[step]["residual"]["std_reward"],
-            bottom=data[step]["residual"]["mean_reward"] - data[step]["residual"]["std_reward"],
+            bottom=data[step]["residual"]["mean_reward"]
+            - data[step]["residual"]["std_reward"],
             width=width,
             alpha=0.4,
             color=mapping_colors["residual"],
@@ -182,27 +185,54 @@ def plot(data, ylim, yticks, ylabel, delta_goal_reaching_rate, output_name, scal
             ax.set_ylabel(f"Accumulated\nReward", y=0.65)
     plt.tight_layout()
     plt.suptitle(f"\\texttt{{{ylabel}}}", y=1.02, fontsize=font_size * 1.1)
-    plt.savefig(f"images/{output_name}", dpi=300 * scale, metadata={"CreationDate": creation_date})
+    plt.savefig(
+        output_path,
+        dpi=300 * scale,
+        metadata={"CreationDate": creation_date},
+    )
 
 
-plot(
-    cartpole_data,
-    ylim=(-4000, 300),
-    yticks=[-2400, -1700, -1000, -300],
-    delta_goal_reaching_rate=1300,
-    ylabel="CartPoleSwingUpEnv",
-    output_name="cartpole.pdf",
-    scale=0.6,  # Default scale
-    creation_date=datetime(2025, 8, 5, 15, 33, 55),
-)
+def main():
+    project_root = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=project_root / "reference-results",
+        help="Directory containing pendulum.json and cartpole.json.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent / "images",
+    )
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-plot(
-    pendulum_data,
-    ylim=(-1350, 50),
-    yticks=[-800, -600, -400, -200],
-    delta_goal_reaching_rate=400,
-    ylabel="Pendulum-v1",
-    output_name="pendulum.pdf",
-    scale=0.6,  # Default scale
-    creation_date=datetime(2025, 8, 5, 15, 33, 56),
-)
+    pendulum_data = json.loads((args.data_dir / "pendulum.json").read_text())
+    cartpole_data = json.loads((args.data_dir / "cartpole.json").read_text())
+
+    plot(
+        cartpole_data,
+        ylim=(-4000, 300),
+        yticks=[-2400, -1700, -1000, -300],
+        delta_goal_reaching_rate=1300,
+        ylabel="CartPoleSwingUpEnv",
+        output_path=args.output_dir / "cartpole.pdf",
+        scale=0.6,
+        creation_date=datetime(2025, 8, 5, 15, 33, 55),
+    )
+    plot(
+        pendulum_data,
+        ylim=(-1350, 50),
+        yticks=[-800, -600, -400, -200],
+        delta_goal_reaching_rate=400,
+        ylabel="Pendulum-v1",
+        output_path=args.output_dir / "pendulum.pdf",
+        scale=0.6,
+        creation_date=datetime(2025, 8, 5, 15, 33, 56),
+    )
+
+
+if __name__ == "__main__":
+    main()

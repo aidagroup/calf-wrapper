@@ -9,8 +9,27 @@ import math
 from pathlib import Path
 
 
+REPRODUCED_METHODS = {"fallback", "conservative", "balanced", "brave", "base"}
+
+
 def compare(reference: dict, actual: dict, absolute_tolerance: float) -> list[dict]:
     rows = []
+    for stage, expected in reference["stages"].items():
+        observed = actual.get("stages", {}).get(stage)
+        rows.append(
+            {
+                "section": "stages",
+                "method": stage,
+                "metric": "checkpoint_step",
+                "reference": expected,
+                "actual": observed,
+                "absolute_delta": (
+                    abs(observed - expected) if observed is not None else None
+                ),
+                "exact": observed == expected,
+                "pass": observed == expected,
+            }
+        )
     for section, methods in reference.items():
         if section == "stages":
             continue
@@ -19,10 +38,28 @@ def compare(reference: dict, actual: dict, absolute_tolerance: float) -> list[di
             {"fallback": actual[section]} if section == "fallback" else actual[section]
         )
         for method, reference_metrics in methods.items():
-            if method not in actual_methods:
+            # Residual RL is a plot-only external baseline. This repository has
+            # neither its implementation nor checkpoints, so the exporter may
+            # carry its archived values through, but it must never be counted
+            # as a reproduced CALF-Wrapper result.
+            if method not in REPRODUCED_METHODS:
                 continue
             for metric, expected in reference_metrics.items():
-                observed = actual_methods[method][metric]
+                observed = actual_methods.get(method, {}).get(metric)
+                if observed is None:
+                    rows.append(
+                        {
+                            "section": section,
+                            "method": method,
+                            "metric": metric,
+                            "reference": expected,
+                            "actual": None,
+                            "absolute_delta": None,
+                            "exact": False,
+                            "pass": False,
+                        }
+                    )
+                    continue
                 delta = observed - expected
                 rows.append(
                     {
@@ -56,6 +93,13 @@ def main() -> None:
         report[env_name] = {
             "verdict": "PASS" if all(row["pass"] for row in rows) else "FAIL",
             "exact": all(row["exact"] for row in rows),
+            "comparison_count": len(rows),
+            "excluded_reference_methods": {
+                "residual": (
+                    "External plot-only baseline; no implementation or checkpoint "
+                    "is present in this repository."
+                )
+            },
             "comparisons": rows,
         }
     args.output.parent.mkdir(parents=True, exist_ok=True)

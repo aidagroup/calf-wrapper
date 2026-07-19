@@ -1,0 +1,94 @@
+{
+  "stages": {
+    "early": 30000,
+    "mid": 36000,
+    "late": 102000
+  },
+  "fallback": {
+    "mean_reward": -329.90240478515625,
+    "std_reward": 285.9991455078125,
+    "goal_reaching_rate": 100.0
+  },
+  "early": {
+    "conservative": {
+      "mean_reward": -301.6100769042969,
+      "std_reward": 138.6342315673828,
+      "goal_reaching_rate": 100.0
+    },
+    "balanced": {
+      "mean_reward": -694.6620483398438,
+      "std_reward": 102.84375762939453,
+      "goal_reaching_rate": 3.3333333333333335
+    },
+    "brave": {
+      "mean_reward": -787.9341430664062,
+      "std_reward": 59.422000885009766,
+      "goal_reaching_rate": 0.0
+    },
+    "base": {
+      "mean_reward": -798.2059326171875,
+      "std_reward": 52.69696044921875,
+      "goal_reaching_rate": 0.0
+    },
+    "residual": {
+      "mean_reward": -745.641357421875,
+      "std_reward": 174.11776733398438,
+      "goal_reaching_rate": 6.666666666666667
+    }
+  },
+  "mid": {
+    "conservative": {
+      "mean_reward": -179.31903076171875,
+      "std_reward": 93.31881713867188,
+      "goal_reaching_rate": 100.0
+    },
+    "balanced": {
+      "mean_reward": -269.3578796386719,
+      "std_reward": 190.3533935546875,
+      "goal_reaching_rate": 90.0
+    },
+    "brave": {
+      "mean_reward": -335.9222717285156,
+      "std_reward": 224.78822326660156,
+      "goal_reaching_rate": 6.666666666666667
+    },
+    "base": {
+      "mean_reward": -364.4486083984375,
+      "std_reward": 253.5751953125,
+      "goal_reaching_rate": 0.0
+    },
+    "residual": {
+      "mean_reward": -166.08843994140625,
+      "std_reward": 81.33470916748047,
+      "goal_reaching_rate": 100.0
+    }
+  },
+  "late": {
+    "conservative": {
+      "mean_reward": -224.0302276611328,
+      "std_reward": 97.93150329589844,
+      "goal_reaching_rate": 100.0
+    },
+    "balanced": {
+      "mean_reward": -171.56948852539062,
+      "std_reward": 82.20709991455078,
+      "goal_reaching_rate": 100.0
+    },
+    "brave": {
+      "mean_reward": -171.30487060546875,
+      "std_reward": 116.63311767578125,
+      "goal_reaching_rate": 100.0
+    },
+    "base": {
+      "mean_reward": -201.97828674316406,
+      "std_reward": 250.97174072265625,
+      "goal_reaching_rate": 96.66666666666667
+    },
+    "residual": {
+      "mean_reward": -153.9989471435547,
+      "std_reward": 73.6167221069336,
+      "goal_reaching_rate": 100.0
+    }
+  }
+}
+
