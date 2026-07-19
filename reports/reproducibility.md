@@ -71,7 +71,9 @@ On exact `origin/main`:
   explicit (`n_steps=2048`), matching the historical Stable-Baselines3 default.
 
 The original six-test suite passes in the isolated worktree. The final suite
-contains nine tests and passes on the maintained local and remote checkouts.
+contains nine tests and passes locally. The preceding remote checkout passed
+its then-current eight-test suite; SSH authentication prevented pulling this
+documentation/launcher follow-up to `gor` during the final audit.
 
 ## Environments
 
