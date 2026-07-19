@@ -1,10 +1,15 @@
+import dataclasses
+import functools
+import importlib.metadata
 import mlflow
 import numpy as np
 import os
+import platform
+import socket
+import subprocess
 import sys
 
 from typing import Dict, Any, Tuple, Union, Optional, List
-from datetime import datetime
 from stable_baselines3.common.logger import (
     HumanOutputFormat,
     KVWriter,
@@ -14,7 +19,6 @@ from stable_baselines3.common.logger import (
 )
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -80,8 +84,56 @@ def create_mlflow_logger():
     return logger
 
 
+def _git_value(*args: str) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", *args], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+def _flatten(value: Any, prefix: str = "") -> Dict[str, Any]:
+    if dataclasses.is_dataclass(value):
+        value = dataclasses.asdict(value)
+    if isinstance(value, dict):
+        flattened = {}
+        for key, child in value.items():
+            child_prefix = f"{prefix}.{key}" if prefix else str(key)
+            flattened.update(_flatten(child, child_prefix))
+        return flattened
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return {prefix: value}
+    if isinstance(value, (list, tuple)):
+        return {prefix: list(value)}
+    if hasattr(value, "__dict__"):
+        public = {k: v for k, v in vars(value).items() if not k.startswith("_")}
+        return _flatten(public, prefix)
+    return {prefix: str(value)}
+
+
+def reproducibility_tags() -> Dict[str, str]:
+    status = _git_value("status", "--porcelain")
+    packages = ("gymnasium", "mlflow", "numpy", "stable-baselines3", "torch")
+    tags = {
+        "repro.git_commit": _git_value("rev-parse", "HEAD"),
+        "repro.git_branch": _git_value("branch", "--show-current"),
+        "repro.git_dirty": str(bool(status)),
+        "repro.hostname": socket.gethostname(),
+        "repro.platform": platform.platform(),
+        "repro.python": platform.python_version(),
+    }
+    for package in packages:
+        try:
+            tags[f"repro.package.{package}"] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            tags[f"repro.package.{package}"] = "not-installed"
+    return tags
+
+
 def mlflow_monitoring():
     def inner1(func):
+        @functools.wraps(func)
         def inner2(*args, **kwargs):
             mlflow_config: MlflowConfig = args[0].mlflow
             mlflow.set_tracking_uri(mlflow_config.tracking_uri)
@@ -92,16 +144,22 @@ def mlflow_monitoring():
 
                 # print("run_name:", run_name)
                 with mlflow.start_run(run_name=mlflow_config.run_name):
-                    # log param
+                    mlflow.set_tags(reproducibility_tags())
+                    mlflow.set_tag("repro.run_status", "RUNNING")
                     if len(args):
-                        args_dict = vars(args[0])
-                        [
-                            mlflow.log_param(k, args_dict[k])
-                            for k in args_dict
-                            if k != "mlflow"
-                        ]
-
-                    return func(*args, **kwargs)
+                        params = _flatten(args[0])
+                        params.pop("mlflow.tracking_uri", None)
+                        params.pop("mlflow.experiment_name", None)
+                        params.pop("mlflow.run_name", None)
+                        mlflow.log_params(params)
+                    try:
+                        result = func(*args, **kwargs)
+                    except BaseException as error:
+                        mlflow.set_tag("repro.run_status", "FAILED")
+                        mlflow.set_tag("repro.failure_type", type(error).__name__)
+                        raise
+                    mlflow.set_tag("repro.run_status", "COMPLETED")
+                    return result
 
         return inner2
 

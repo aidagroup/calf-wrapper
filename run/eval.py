@@ -9,6 +9,7 @@ import gymnasium as gym
 import mlflow
 import tempfile
 import json
+import csv
 import tyro
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecEnv
@@ -94,6 +95,9 @@ class EvalConfig:
     video_folder: Path = run_path / "artifacts" / "videos"
     """Path to the folder where the video will be saved"""
 
+    checkpoint_stage: str = "none"
+    """Semantic checkpoint stage: none, early, mid, or late"""
+
 
 presets = {
     # Preset configurations for different environments
@@ -175,9 +179,9 @@ def run_episode(
 ) -> list[dict[str, Any]]:
     obs = env.reset()
     data = []
-    for step in range(n_steps - 1):
+    for step in range(n_steps):
         action = get_action(obs)
-        next_obs, reward, is_done, info = env.step(np.array(action, dtype=float))
+        next_obs, reward, is_done, info = env.step(action)
         data.append(
             {
                 "step": step,
@@ -193,27 +197,24 @@ def run_episode(
     return data
 
 
-def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
+def goal_reaching_mask(env_id: str, latest_obs: np.ndarray) -> np.ndarray:
     if env_id == "Pendulum-v1":
-        return (
-            np.prod(
-                np.abs(latest_obs - np.array([[1, 0, 0]]))
-                < np.array([[0.05, 0.05, 0.3]]),
-                axis=1,
-            ).mean()
-            * 100
+        return np.prod(
+            np.abs(latest_obs - np.array([[1, 0, 0]])) < np.array([[0.05, 0.05, 0.3]]),
+            axis=1,
         )
     elif env_id == "CartpoleSwingupEnvLong-v0":
-        return (
-            np.prod(
-                np.abs(latest_obs - np.array([[0, 0, 1, 0, 0]]))
-                < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
-                axis=1,
-            ).mean()
-            * 100
+        return np.prod(
+            np.abs(latest_obs - np.array([[0, 0, 1, 0, 0]]))
+            < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
+            axis=1,
         )
     else:
         raise ValueError(f"Unknown environment: {env_id}")
+
+
+def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
+    return float(np.mean(goal_reaching_mask(env_id, latest_obs)) * 100)
 
 
 def make_env(
@@ -297,22 +298,52 @@ def main(config: EvalConfig):
     final_rewards = np.vstack([item["reward"] for item in data]).sum(axis=0)
     for i, reward in enumerate(final_rewards):
         mlflow.log_metric("reward", reward, step=i)
+    latest_obs = data[-1]["obs"]
+    successes = goal_reaching_mask(config.env_id, latest_obs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_filepath = Path(tmp_dir) / f"episode_data.json"
         with open(tmp_filepath, "w") as f:
             json.dump(data, f, cls=NumpyEncoder)
         mlflow.log_artifact(str(tmp_filepath), "episode_data")
+        trial_filepath = Path(tmp_dir) / "trial_metrics.csv"
+        with open(trial_filepath, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["trial", "reward", "goal_reached"])
+            writer.writeheader()
+            for trial, (reward, success) in enumerate(zip(final_rewards, successes)):
+                writer.writerow(
+                    {
+                        "trial": trial,
+                        "reward": float(reward),
+                        "goal_reached": bool(success),
+                    }
+                )
+        mlflow.log_artifact(str(trial_filepath), "raw")
 
     if config.record_video:
         mlflow.log_artifact(video_folder, "video")
 
+    confidence_interval = float(
+        1.96 * np.std(final_rewards) / np.sqrt(len(final_rewards))
+    )
     metrics = {
         "mean_reward": float(np.mean(final_rewards)),
         "std_reward": float(np.std(final_rewards)),
-        "goal_reaching_rate": float(
-            goal_reaching_rate(env_id=config.env_id, latest_obs=data[-1]["obs"])
-        ),
+        "reward_ci95_half_width": confidence_interval,
+        "goal_reaching_rate": float(np.mean(successes) * 100),
+        "n_trials": float(len(final_rewards)),
     }
+    calf_infos = [
+        info
+        for item in data
+        for info in item["info"]
+        if "calf.base_action_applied" in info
+    ]
+    if calf_infos:
+        base_fraction = float(
+            np.mean([info["calf.base_action_applied"] for info in calf_infos])
+        )
+        metrics["base_action_fraction"] = base_fraction
+        metrics["fallback_action_fraction"] = 1.0 - base_fraction
     mlflow.log_metrics(metrics)
 
     from pprint import pprint
