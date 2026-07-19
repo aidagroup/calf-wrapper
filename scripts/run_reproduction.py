@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -54,8 +55,7 @@ def commands_for_environment(
     if not skip_training:
         commands.append(
             [
-                "uv",
-                "run",
+                sys.executable,
                 "run/train_ppo.py",
                 env_name,
                 "--mlflow.tracking-uri",
@@ -90,8 +90,7 @@ def commands_for_environment(
     ]
     commands.append(
         [
-            "uv",
-            "run",
+            sys.executable,
             "run/eval.py",
             env_name,
             "--eval-mode",
@@ -112,8 +111,7 @@ def commands_for_environment(
         )
         commands.append(
             [
-                "uv",
-                "run",
+                sys.executable,
                 "run/eval.py",
                 env_name,
                 "--eval-mode",
@@ -130,8 +128,7 @@ def commands_for_environment(
         for mode, relaxprob in WRAPPER_MODES.items():
             commands.append(
                 [
-                    "uv",
-                    "run",
+                    sys.executable,
                     "run/eval.py",
                     env_name,
                     "--eval-mode",
