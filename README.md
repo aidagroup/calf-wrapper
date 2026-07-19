@@ -97,7 +97,7 @@ The [`reproduce/`](./reproduce/) directory contains evaluation bash-scripts for 
 Firstly, run training script
 
 ```sh
-uv run run/train_ppo.py cartpole
+uv run run/train_ppo.py cartpole --device cuda:0
 ```
 
 Then run evaluation scripts:
@@ -147,7 +147,7 @@ bash reproduce/cartpole/calf_wrapper/brave/late.sh
 Firstly, run training script
 
 ```sh
-uv run run/train_ppo.py pendulum
+uv run run/train_ppo.py pendulum --device cuda:0
 ```
 
 Then run evaluation scripts
@@ -200,12 +200,17 @@ Preview the complete two-environment workload without launching it:
 uv run python scripts/run_reproduction.py \
   --tracking-uri http://127.0.0.1:5001 \
   --artifact-root artifacts/reproduction \
+  --training-device cuda:0 \
   --dry-run
 ```
 
 Remove `--dry-run` only from a clean pushed commit. The launcher deliberately
 refuses dirty or unpushed experiment code. Use `--smoke` for a 3,000-step
 training and short evaluation check before the full workload.
+The published PPO checkpoint tensors are exactly reproducible with CUDA
+training. CPU training is deterministic on a fixed machine but follows a
+different numerical trajectory, so use `--training-device cpu` only for an
+explicit device-ablation run.
 
 Export completed runs and compare the metrics without rounding:
 

@@ -49,6 +49,7 @@ def commands_for_environment(
     tracking_uri: str,
     artifact_root: Path,
     experiment_prefix: str,
+    training_device: str,
     smoke: bool,
     skip_training: bool,
 ) -> list[list[str]]:
@@ -73,6 +74,8 @@ def commands_for_environment(
                 str(train_steps),
                 "--save-model-every-steps",
                 "3000",
+                "--device",
+                training_device,
             ]
         )
 
@@ -157,6 +160,15 @@ def main() -> None:
         "--artifact-root", type=Path, default=Path("artifacts/reproduction")
     )
     parser.add_argument("--experiment-prefix", default="calf-wrapper/reproduction")
+    parser.add_argument(
+        "--training-device",
+        default="cuda:0",
+        help=(
+            "PPO training device. The published checkpoints are exactly "
+            "reproducible with cuda:0; CPU training follows a different "
+            "numerical trajectory."
+        ),
+    )
     parser.add_argument("--environment", choices=["all", *ENVIRONMENTS], default="all")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--skip-training", action="store_true")
@@ -175,6 +187,7 @@ def main() -> None:
             args.tracking_uri,
             args.artifact_root,
             args.experiment_prefix,
+            args.training_device,
             args.smoke,
             args.skip_training,
         )

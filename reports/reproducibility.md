@@ -13,20 +13,21 @@ The two plotting JSON files contain 51 numeric leaves each; all 51 match exactly
 when the nine archived Residual RL values are included. Both PDFs generated from
 the remote replay export are byte-for-byte identical to the archived PDFs.
 
-Fresh single-seed PPO training is not numerically identical to the archived
-training. This is reported separately and is not concealed by a post-hoc
-tolerance.
+Fresh CUDA training is also exactly reproducible. Two parallel runs per
+environment were executed on the two local RTX 3090 GPUs with the published
+seeds. Every saved trained state matched between runs: 34/34 Pendulum and
+100/100 CartPole checkpoints. The published early, mid, and late checkpoint
+states also matched byte for byte.
 
-| Environment | Archived-checkpoint replay | Fresh PPO retraining | Interpretation |
+| Environment | Archived-checkpoint replay | Fresh CUDA training | CPU diagnostic |
 |---|---|---|---|
-| Pendulum-v1 | **PASS**, 42/42 exact | **FAIL** for full result reproduction | Conservative CALF still reaches the goal in 100%, 100%, and 93.33% of early/mid/late trials while the fresh base reaches 0% at all stages, but balanced/brave late-stage behavior and reward distributions do not reproduce. |
-| CartPoleSwingUpEnv | **PASS**, 42/42 exact | **WARNING** | Conservative CALF retains 100% goal reaching at all stages and the late policy behavior is qualitatively recovered, but the reward distributions and several balanced/brave goal rates differ. |
+| Pendulum-v1 | **PASS**, 42/42 exact | **PASS**, 34/34 A/B states exact; published 30k/36k/102k states exact | Different numerical trajectory |
+| CartPoleSwingUpEnv | **PASS**, 42/42 exact | **PASS**, 100/100 A/B states exact; published 99k/108k/270k states exact | Different numerical trajectory |
 
-The strict zero-tolerance comparison labels both fresh-training environments
-`FAIL`; the `WARNING` above is a scientific interpretation of CartPole's
-qualitative recovery, not a claim of numerical equality. A multi-training-seed
-sensitivity analysis is required before making a stronger statement about PPO
-training-distribution reproducibility.
+The earlier full run on `gor` trained on CPU and therefore did not reproduce the
+CUDA-generated published checkpoints. Its strict comparison correctly reports
+different numbers, but it is a device-ablation result rather than evidence that
+PPO or the published training is nondeterministic.
 
 ## Source and code provenance
 
@@ -40,10 +41,14 @@ The checkout was reset to the canonical `origin/main` before any fix.
 | Documented CartPole 300,000-step horizon | `270d24ed3abb5847a755a432ef33f00ebdba62db` |
 | Isolated reference-replay namespace; experiment-producing replay SHA | `48cb203552e99909134c6af64a420140369df1d6` |
 | Complete raw export, comparison, and deterministic plot evidence | `5aa8ec7` |
+| Isolated origin-main worktree with launch-only fix | `25d660381a443768c2e47a53cab1ebedd86dbc95` (local experiment branch) |
 
 Branch: `feat/reproducible-remote-experiments`.
-Every experiment-producing commit was pushed before execution, and every full
-or replay MLflow run reports `repro.git_dirty=False`.
+Every remote experiment-producing commit was pushed before execution, and every
+full or replay remote MLflow run reports `repro.git_dirty=False`. The isolated
+local CUDA audit used the clean local experiment commit listed above; it changes
+only the two broken path references and is intentionally not part of the main
+reproduction branch.
 
 ## Clean-baseline audit and diagnosed failures
 
@@ -55,6 +60,9 @@ On exact `origin/main`:
 - PPO training could not start because `run/train_ppo.py` referenced undefined
   `current_dir`; the preserved failure was `NameError: name 'current_dir' is not
   defined`.
+- An isolated worktree at the exact baseline reproduced this failure. Replacing
+  only the two undefined `current_dir` references with the already-defined
+  `run_path` was sufficient to launch the original training pipeline.
 - Evaluation with the archived checkpoints did not reproduce the published
   metrics because the baseline had changed the historical rollout from
   `range(n_steps)` to `range(n_steps - 1)` and converted actions to float64.
@@ -62,7 +70,8 @@ On exact `origin/main`:
   evaluations exact. The fixes also made PPO's effective rollout horizon
   explicit (`n_steps=2048`), matching the historical Stable-Baselines3 default.
 
-The final suite contains 8 tests and passes on both local and remote checkouts.
+The original six-test suite passes in the isolated worktree. The final suite
+contains nine tests and passes on the maintained local and remote checkouts.
 
 ## Environments
 
@@ -81,9 +90,9 @@ The final suite contains 8 tests and passes on both local and remote checkouts.
 | MLflow | 2.20.0 | 2.20.0 |
 | NumPy | 2.1.3 | 2.1.3 |
 
-PyTorch detects CUDA on both machines. The documented presets intentionally
-train and evaluate on CPU, so the device parameter recorded by the production
-runs is `cpu`.
+PyTorch detects CUDA on both machines. Exact paper-checkpoint reproduction
+requires CUDA training. Evaluation remains deterministic on CPU. The retained
+`gor` training runs used CPU and are documented below as a device diagnostic.
 
 ## Isolated remote infrastructure
 
@@ -115,17 +124,19 @@ uv run python -m black --check run scripts src tests publication/plots.py
 uv run python scripts/run_reproduction.py \
   --tracking-uri http://127.0.0.1:5001 \
   --artifact-root artifacts/reproduction \
+  --training-device cuda:0 \
   --dry-run
 docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet
 docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build
 ```
 
-Fresh full workload on `gor`:
+Retained CPU device-diagnostic workload on `gor`:
 
 ```bash
 uv run python scripts/run_reproduction.py \
   --tracking-uri http://127.0.0.1:5001 \
   --artifact-root artifacts/reproduction \
+  --training-device cpu \
   --environment all
 ```
 
@@ -158,6 +169,38 @@ uv run python plots.py \
   --data-dir ../reports/results/reference-replay \
   --output-dir /tmp/calf-wrapper-reference-plots
 ```
+
+## Local CUDA training reproducibility
+
+Four jobs were launched concurrently from the isolated origin-main worktree:
+Pendulum A and CartPole A on physical GPU 0, and Pendulum B and CartPole B on
+physical GPU 1. Both GPUs are RTX 3090 cards. The jobs shared the same locked
+Python environment and differed only in their artifact and MLflow run roots.
+
+| Environment | A run ID | B run ID | A/B trained-state result |
+|---|---|---|---|
+| Pendulum | `27c1d52fb84244059d4f88ccddce25e6` | `5932ee708e3e40a997db4b5997751aae` | 34/34 checkpoints byte-exact |
+| CartPole | `689045eef3384bdd9e1a18a78450b785` | `b1292a769e4446b299a25dc19636adae` | 100/100 checkpoints byte-exact |
+
+For every checkpoint, `policy.pth`, `policy.optimizer.pth`, and
+`pytorch_variables.pth` are identical between A and B. All 15 non-wall-clock
+MLflow metric histories match exactly for each environment. Only `time/fps` and
+`time/time_elapsed` differ, as expected.
+
+The trained states also match the archived paper checkpoints exactly:
+
+- Pendulum: 30,000, 36,000, and 102,000 steps;
+- CartPole: 99,000, 108,000, and 270,000 steps.
+
+The complete ZIP hashes are not identical because Stable-Baselines3 stores
+run-specific `start_time` and timing-bearing episode information in the `data`
+member. This metadata difference does not affect the model, optimizer, or
+evaluation. Maximum trained-parameter difference is exactly zero.
+
+An additional comparison using the maintained training code established the
+same device boundary: local CUDA checkpoints match the published tensors, while
+local and remote CPU checkpoints do not. The launcher therefore makes the paper
+training device explicit and defaults to `cuda:0`.
 
 ## MLflow experiments and principal runs
 
@@ -203,7 +246,9 @@ Each result directory contains:
 Evidence directories:
 
 - [`results/reference-replay`](results/reference-replay)
-- [`results/fresh-training`](results/fresh-training)
+- [`results/fresh-training`](results/fresh-training) (retained CPU diagnostic)
+- [`results/origin-main-cuda/checkpoint-comparison.json`](results/origin-main-cuda/checkpoint-comparison.json)
+  (all A/B and published trained-state comparisons)
 
 The archived Residual RL values originate from CALF-Enhance. This repository
 contains neither that method's implementation nor its checkpoints. The exporter
@@ -212,11 +257,13 @@ plots, records that fact in `provenance.json`, and excludes them from the
 CALF-Wrapper reproducibility verdict. This prevents an imported baseline from
 being misrepresented as a reproduced run.
 
-## Fresh-training results
+## CPU device-diagnostic results
 
-All values below are direct MLflow exports; no display rounding is applied to
-reward statistics. Wrapper utilization is shown as base/fallback action percent.
-Every row uses 30 evaluation trials.
+These values come from the retained CPU-trained `gor` workload. They are useful
+for measuring device sensitivity but are not a failed rerun of the published
+CUDA protocol. No display rounding is applied to reward statistics. Wrapper
+utilization is shown as base/fallback action percent. Every row uses 30
+evaluation trials.
 
 ### Pendulum-v1
 
@@ -282,9 +329,9 @@ byte (`cmp` exit status 0 for both files).
 
 ## Final validation
 
-- 8/8 tests passed locally and remotely.
+- 9/9 tests passed locally; the original worktree suite passed 6/6.
 - Python compilation passed for `run`, `scripts`, `src`, tests, and plotting.
-- Black reported all 22 checked Python files correctly formatted.
+- Black reported all 24 checked Python files correctly formatted.
 - The launcher dry-run emitted all 28 expected commands.
 - Docker Compose validation passed.
 - The remote tracking stack and the pre-existing CALF-Enhance stack were healthy
@@ -292,8 +339,9 @@ byte (`cmp` exit status 0 for both files).
 - The replay export contains 26 aggregate rows and 780 raw trial rows; no run is
   incomplete.
 
-The exact checkpoint replay establishes that the published CALF-Wrapper numbers
-and figures are reproducible from the preserved artifacts. The fresh-training
-result shows that a single PPO seed is insufficient to claim training-level
-numerical reproducibility, especially for Pendulum; this should be addressed by
-the planned multi-seed and hyperparameter sensitivity analysis.
+The published CALF-Wrapper result is reproducible at every tested level: two
+independent local CUDA runs reproduce one another, their selected trained states
+reproduce the archived paper checkpoints, checkpoint evaluation reproduces all
+reported metrics, and plotting reproduces both PDFs byte for byte. CPU training
+is deterministic locally but follows a different floating-point trajectory and
+must not be substituted for the published CUDA protocol.

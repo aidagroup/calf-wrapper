@@ -5,6 +5,11 @@ The `residual` entries originate from CALF-Enhance; all other entries are
 produced by this repository's 30-trial evaluation matrix. Comparison tooling
 checks floating-point values without rounding.
 
+The archived PPO checkpoint tensors were generated on CUDA. Two independent
+local CUDA runs reproduce all selected checkpoint tensors exactly; CPU training
+uses a different floating-point trajectory and is not an equivalent paper
+reproduction protocol.
+
 Canonical paper artifact SHA-256 values:
 
 - `cartpole.json`: `fe1e96701a0ee6cc5391716708932f718ff4af9e7f150bf1dc95813e7034a047`
