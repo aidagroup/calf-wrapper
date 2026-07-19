@@ -79,13 +79,14 @@ def main() -> None:
     parser.add_argument("--tracking-uri", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--reference-dir", type=Path)
+    parser.add_argument("--experiment-prefix", default="calf-wrapper/reproduction")
     args = parser.parse_args()
     mlflow.set_tracking_uri(args.tracking_uri)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     raw_rows = []
     for env_name in STAGES:
-        experiment_name = f"calf-wrapper/reproduction/eval/{env_name}"
+        experiment_name = f"{args.experiment_prefix}/eval/{env_name}"
         runs = completed_runs(experiment_name)
         selected = select_latest_by_name(runs)
         reference = None

@@ -48,6 +48,7 @@ def commands_for_environment(
     env_name: str,
     tracking_uri: str,
     artifact_root: Path,
+    experiment_prefix: str,
     smoke: bool,
     skip_training: bool,
 ) -> list[list[str]]:
@@ -63,7 +64,7 @@ def commands_for_environment(
                 "--mlflow.tracking-uri",
                 tracking_uri,
                 "--mlflow.experiment-name",
-                f"calf-wrapper/reproduction/train/{env_name}",
+                f"{experiment_prefix}/train/{env_name}",
                 "--mlflow.run-name",
                 f"train_{env_name}_seed_{config['seed']}",
                 "--local-artifacts-path",
@@ -82,7 +83,7 @@ def commands_for_environment(
         "--mlflow.tracking-uri",
         tracking_uri,
         "--mlflow.experiment-name",
-        f"calf-wrapper/reproduction/eval/{env_name}",
+        f"{experiment_prefix}/eval/{env_name}",
         "--n-envs",
         str(n_envs),
         "--n-steps",
@@ -155,6 +156,7 @@ def main() -> None:
     parser.add_argument(
         "--artifact-root", type=Path, default=Path("artifacts/reproduction")
     )
+    parser.add_argument("--experiment-prefix", default="calf-wrapper/reproduction")
     parser.add_argument("--environment", choices=["all", *ENVIRONMENTS], default="all")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--skip-training", action="store_true")
@@ -172,6 +174,7 @@ def main() -> None:
             env_name,
             args.tracking_uri,
             args.artifact_root,
+            args.experiment_prefix,
             args.smoke,
             args.skip_training,
         )
