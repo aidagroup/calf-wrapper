@@ -15,6 +15,7 @@ ENVIRONMENTS = {
         "seed": 9,
         "eval_seed": 42,
         "steps": 200,
+        "total_timesteps": 102_000,
         "stages": {"early": 30_000, "mid": 36_000, "late": 102_000},
         "artifact_dir": "ppo_Pendulum-v1_9",
     },
@@ -22,6 +23,7 @@ ENVIRONMENTS = {
         "seed": 42,
         "eval_seed": 42,
         "steps": 1_000,
+        "total_timesteps": 300_000,
         "stages": {"early": 99_000, "mid": 108_000, "late": 270_000},
         "artifact_dir": "ppo_CartpoleSwingupEnv-v0_42",
     },
@@ -51,7 +53,7 @@ def commands_for_environment(
 ) -> list[list[str]]:
     config = ENVIRONMENTS[env_name]
     commands: list[list[str]] = []
-    train_steps = 3_000 if smoke else config["stages"]["late"]
+    train_steps = 3_000 if smoke else config["total_timesteps"]
     if not skip_training:
         commands.append(
             [
