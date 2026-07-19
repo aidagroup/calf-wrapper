@@ -3,7 +3,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from run.train_td3 import ENHANCE_COMMIT, ENHANCE_LOCK_SHA256, enhance_command
-from scripts.run_td3_matrix import parse_seeds, start_tmux_sessions, training_command
+from scripts.run_td3_matrix import (
+    ensure_experiments,
+    parse_seeds,
+    start_tmux_sessions,
+    training_command,
+)
 
 
 def test_td3_command_uses_pinned_enhance_runtime_and_hyperparameters():
@@ -78,3 +83,33 @@ def test_td3_matrix_starts_one_concurrent_tmux_session_per_seed(monkeypatch):
         "td3-drone-s2-g0",
     ]
     assert all(" && " not in launch[-1] for launch in launches)
+
+
+def test_td3_matrix_precreates_experiments_before_concurrent_workers():
+    class FakeClient:
+        def __init__(self):
+            self.created = []
+
+        def get_experiment_by_name(self, name):
+            return None
+
+        def create_experiment(self, name):
+            self.created.append(name)
+            return str(len(self.created))
+
+    client = FakeClient()
+    experiment_ids = ensure_experiments(
+        "http://tracking",
+        "nightly",
+        ["underwater-drone", "robot-navigation"],
+        client=client,
+    )
+
+    assert client.created == [
+        "nightly/underwater-drone",
+        "nightly/robot-navigation",
+    ]
+    assert experiment_ids == {
+        "nightly/underwater-drone": "1",
+        "nightly/robot-navigation": "2",
+    }

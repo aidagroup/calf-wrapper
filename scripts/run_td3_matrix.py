@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mlflow import MlflowClient
+
 from scripts.run_reproduction import require_pushed_clean_commit
 
 ENVIRONMENTS = {
@@ -108,6 +110,29 @@ def start_tmux_sessions(
         print(f"started concurrent session {session}", flush=True)
 
 
+def ensure_experiments(
+    tracking_uri: str,
+    experiment_prefix: str,
+    environments: list[str],
+    *,
+    client: MlflowClient | None = None,
+) -> dict[str, str]:
+    """Create all experiments before concurrent workers call set_experiment."""
+
+    tracking_client = client or MlflowClient(tracking_uri=tracking_uri)
+    experiment_ids = {}
+    for environment in environments:
+        experiment_name = f"{experiment_prefix}/{environment}"
+        experiment = tracking_client.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            experiment_id = tracking_client.create_experiment(experiment_name)
+        else:
+            experiment_id = experiment.experiment_id
+        experiment_ids[experiment_name] = experiment_id
+        print(f"ready MLflow experiment {experiment_name} ({experiment_id})")
+    return experiment_ids
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tracking-uri", required=True)
@@ -160,6 +185,7 @@ def main() -> None:
     if args.dry_run:
         return
 
+    ensure_experiments(args.tracking_uri, args.experiment_prefix, selected)
     start_tmux_sessions(rendered_jobs, repo_root)
     print(f"started {len(rendered_jobs)} concurrent TD3 runs", flush=True)
 
