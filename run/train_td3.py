@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment-name", required=True)
     parser.add_argument("--run-name", required=True)
     parser.add_argument("--checkpoint-dir", type=Path)
-    parser.add_argument("--checkpoint-every", type=int, default=300_000)
+    parser.add_argument("--checkpoint-every", type=int, default=30_000)
     parser.add_argument("--reference-tracking-uri")
     parser.add_argument("--reference-run-id")
     parser.add_argument("--comparison-report", type=Path)

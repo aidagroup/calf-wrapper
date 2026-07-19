@@ -26,6 +26,7 @@ from src.envs.robot_dynamics import RobotDynamicsMetricsCollector
 from src.envs.robot_navigation import RobotNavigationMetricsCollector
 from src.envs.underwaterdrone import UnderwaterDroneMetricsCollector
 from src.utils.metrics_controller import MetricsCollector
+from src.utils.artifact_uploader import get_artifact_uploader
 
 SOURCE_COMMIT = "afb5edc49427054c99d6fbfe87b603d126724eb8"
 
@@ -90,7 +91,7 @@ class Args:
     """the rolling average window for the metrics"""
     checkpoint_dir: Path = RUN_PATH / "artifacts" / "td3_checkpoints"
     """directory for periodic and final training checkpoints"""
-    checkpoint_every: int = 300_000
+    checkpoint_every: int = 30_000
     """checkpoint interval in completed environment steps"""
 
     def __post_init__(self):
@@ -98,7 +99,10 @@ class Args:
         auto_experiment_name = default_experiment_name + "__" + self.env_id
 
         # Respect CLI override: only auto-generate if user didn't change it.
-        if not self.mlflow.experiment_name or self.mlflow.experiment_name == default_experiment_name:
+        if (
+            not self.mlflow.experiment_name
+            or self.mlflow.experiment_name == default_experiment_name
+        ):
             self.mlflow.experiment_name = auto_experiment_name
 
         # Respect CLI override: only auto-generate if user didn't set it.
@@ -106,7 +110,11 @@ class Args:
             timestamp = int(time.time())
             if "__" + self.env_id in self.mlflow.experiment_name:
                 self.mlflow.run_name = (
-                    self.mlflow.experiment_name + "__" + str(self.seed) + "__" + str(timestamp)
+                    self.mlflow.experiment_name
+                    + "__"
+                    + str(self.seed)
+                    + "__"
+                    + str(timestamp)
                 )
             else:
                 self.mlflow.run_name = (
@@ -212,12 +220,10 @@ def save_checkpoint(
     observation: np.ndarray,
     replay_buffer: ReplayBuffer,
 ) -> Path:
-    """Atomically save the complete trainable TD3 state without sampling RNGs."""
+    """Save TD3 state locally and stage it for verified batch upload."""
 
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = (
-        args.checkpoint_dir / f"td3_checkpoint_{completed_steps}_steps.pt"
-    )
+    checkpoint_path = args.checkpoint_dir / f"td3_checkpoint_{completed_steps}_steps.pt"
     temporary_path = checkpoint_path.with_suffix(".pt.tmp")
     payload = {
         "format": "calf-enhance-cleanrl-td3-v1",
@@ -278,9 +284,11 @@ def save_checkpoint(
         )
         + "\n"
     )
-    mlflow.log_artifact(str(checkpoint_path), artifact_path="checkpoints")
-    mlflow.log_artifact(str(metadata_path), artifact_path="checkpoints")
-    print(f"checkpoint saved: {checkpoint_path}")
+    uploader = get_artifact_uploader()
+    if uploader is None:
+        raise RuntimeError("ArtifactUploader must be running before checkpointing")
+    uploader.stage_files([checkpoint_path, metadata_path], "checkpoints")
+    print(f"checkpoint saved and staged: {checkpoint_path}")
     return checkpoint_path
 
 

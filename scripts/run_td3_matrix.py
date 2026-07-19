@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the two-environment TD3 seed matrix in per-GPU tmux queues."""
+"""Launch one concurrent tmux session per TD3 environment/seed pair."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ def training_command(
     tracking_uri: str,
     experiment_prefix: str,
     smoke: bool,
+    checkpoint_every: int = 30_000,
 ) -> list[str]:
     config = ENVIRONMENTS[environment]
     total_timesteps = 1_000 if smoke else 3_000_000
@@ -53,6 +54,8 @@ def training_command(
         f"{experiment_prefix}/{environment}",
         "--run-name",
         f"td3_{config['env_id']}_seed_{seed}",
+        "--checkpoint-every",
+        str(checkpoint_every),
     ]
 
 
@@ -65,6 +68,46 @@ def parse_seeds(value: str | None, environment: str) -> list[int]:
     return seeds
 
 
+def start_tmux_sessions(
+    rendered_jobs: list[tuple[str, str, Path]], repo_root: Path
+) -> None:
+    """Start every rendered job immediately in its own tmux session."""
+
+    existing_sessions = []
+    for session, _, _ in rendered_jobs:
+        existing_session = subprocess.run(
+            ["tmux", "has-session", "-t", session],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if existing_session.returncode == 0:
+            existing_sessions.append(session)
+    if existing_sessions:
+        raise SystemExit(
+            "tmux session(s) already exist: " + ", ".join(existing_sessions)
+        )
+
+    for session, rendered, log_path in rendered_jobs:
+        session_command = (
+            f"set -o pipefail; {rendered} 2>&1 | tee {shlex.quote(str(log_path))}"
+        )
+        subprocess.run(
+            [
+                "tmux",
+                "new-session",
+                "-d",
+                "-s",
+                session,
+                "-c",
+                str(repo_root),
+                f"bash -lc {shlex.quote(session_command)}",
+            ],
+            check=True,
+        )
+        print(f"started concurrent session {session}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tracking-uri", required=True)
@@ -75,6 +118,7 @@ def main() -> None:
     parser.add_argument("--session-prefix", default="calf-wrapper-td3")
     parser.add_argument("--log-dir", type=Path, default=Path("run/logs"))
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--checkpoint-every", type=int, default=30_000)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-unpushed", action="store_true")
     args = parser.parse_args()
@@ -94,7 +138,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     args.log_dir.mkdir(parents=True, exist_ok=True)
 
-    gpu_queues: dict[int, list[str]] = {gpu: [] for gpu in gpus}
+    rendered_jobs: list[tuple[str, str, Path]] = []
     for index, (environment, seed) in enumerate(jobs):
         gpu = gpus[index % len(gpus)]
         short_env = environment.replace("-", "_")
@@ -106,37 +150,18 @@ def main() -> None:
             tracking_uri=args.tracking_uri,
             experiment_prefix=args.experiment_prefix,
             smoke=args.smoke,
+            checkpoint_every=args.checkpoint_every,
         )
         log_path = args.log_dir / f"{job_name}.log"
         rendered = shlex.join(command)
         print(f"[{index + 1}/{len(jobs)}] {job_name}: {rendered}", flush=True)
-        gpu_queues[gpu].append(f"{rendered} 2>&1 | tee {shlex.quote(str(log_path))}")
+        rendered_jobs.append((job_name, rendered, log_path))
 
     if args.dry_run:
         return
 
-    for gpu, queued_commands in gpu_queues.items():
-        if not queued_commands:
-            continue
-        session = f"{args.session_prefix}-queue-g{gpu}"
-        queue_command = "set -o pipefail; " + " && ".join(queued_commands)
-        subprocess.run(
-            [
-                "tmux",
-                "new-session",
-                "-d",
-                "-s",
-                session,
-                "-c",
-                str(repo_root),
-                f"bash -lc {shlex.quote(queue_command)}",
-            ],
-            check=True,
-        )
-        print(
-            f"started {session} with {len(queued_commands)} sequential jobs",
-            flush=True,
-        )
+    start_tmux_sessions(rendered_jobs, repo_root)
+    print(f"started {len(rendered_jobs)} concurrent TD3 runs", flush=True)
 
 
 if __name__ == "__main__":

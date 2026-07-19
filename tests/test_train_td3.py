@@ -1,7 +1,9 @@
 from argparse import Namespace
+from pathlib import Path
+from types import SimpleNamespace
 
 from run.train_td3 import ENHANCE_COMMIT, ENHANCE_LOCK_SHA256, enhance_command
-from scripts.run_td3_matrix import parse_seeds, training_command
+from scripts.run_td3_matrix import parse_seeds, start_tmux_sessions, training_command
 
 
 def test_td3_command_uses_pinned_enhance_runtime_and_hyperparameters():
@@ -47,3 +49,32 @@ def test_td3_matrix_defaults_and_explicit_cuda_device():
     assert command[command.index("--device") + 1] == "cuda:1"
     assert command[command.index("--total-timesteps") + 1] == "1000"
     assert command[command.index("--learning-starts") + 1] == "25000"
+    assert command[command.index("--checkpoint-every") + 1] == "30000"
+
+
+def test_td3_matrix_starts_one_concurrent_tmux_session_per_seed(monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[:2] == ["tmux", "has-session"]:
+            return SimpleNamespace(returncode=1)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("scripts.run_td3_matrix.subprocess.run", fake_run)
+    jobs = [
+        ("td3-drone-s0-g0", "python train.py --seed 0", Path("run/logs/s0.log")),
+        ("td3-drone-s1-g0", "python train.py --seed 1", Path("run/logs/s1.log")),
+        ("td3-drone-s2-g0", "python train.py --seed 2", Path("run/logs/s2.log")),
+    ]
+
+    start_tmux_sessions(jobs, Path("/repo"))
+
+    launches = [call for call, _ in calls if call[:2] == ["tmux", "new-session"]]
+    assert len(launches) == 3
+    assert [launch[launch.index("-s") + 1] for launch in launches] == [
+        "td3-drone-s0-g0",
+        "td3-drone-s1-g0",
+        "td3-drone-s2-g0",
+    ]
+    assert all(" && " not in launch[-1] for launch in launches)

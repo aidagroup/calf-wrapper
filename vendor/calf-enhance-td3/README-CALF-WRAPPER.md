@@ -13,8 +13,10 @@ The local integration patch makes two scoped changes:
 
 - the MLflow helper permits execution from a copied directory when
   `MLFLOW_DISABLE_GIT=1`;
-- the TD3 trainer writes periodic and final model checkpoints and uploads them
-  to the active MLflow run under `checkpoints/`.
+- the TD3 trainer writes periodic and final model checkpoints;
+- the artifact worker uploads checkpoints, trajectories, and metadata in
+  batches, writes a size/SHA-256 manifest for every batch, downloads every
+  remote file for verification, and retains failed batches for retry.
 
 The environment dynamics and TD3 update logic remain those of the pinned
 source revision.

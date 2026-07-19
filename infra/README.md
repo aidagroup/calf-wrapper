@@ -33,10 +33,10 @@ uv run python scripts/run_td3_matrix.py \
 
 The default matrix contains 20 runs: seeds 0--9 for `UnderwaterDrone-v0` and
 seeds 1--10 for `RobotNavigationConstSpeedCatch-v0`. Without `--dry-run`, the
-launcher creates one detached `tmux` queue per GPU. Each GPU runs one job at a
-time and processes its assigned seeds sequentially, while both GPU queues run
-in parallel and survive SSH disconnects. Before committing GPU time, run the
-two-job smoke matrix:
+launcher creates one detached `tmux` session per environment/seed pair and
+starts all sessions immediately. Jobs are assigned round-robin to the requested
+GPUs and survive SSH disconnects. Before committing GPU time, run the two-job
+smoke matrix:
 
 ```bash
 uv run python scripts/run_td3_matrix.py \
@@ -49,8 +49,25 @@ uv run python scripts/run_td3_matrix.py \
 The launcher delegates every job to the CALF-Enhance source tree copied under
 `vendor/calf-enhance-td3` and uses its frozen dependency lock. Periodic and
 final checkpoints are stored locally under `run/artifacts/` and uploaded to
-each MLflow run under `checkpoints/`. The wrapper PPO environment is not
+each MLflow run under `checkpoints/`. Full runs checkpoint every 30,000 steps.
+Artifacts are accumulated in run-specific staging directories, uploaded in
+batches every 30 seconds, and remotely verified against a per-batch manifest
+containing every file's size and SHA-256. Failed batches are retried without
+deleting their staged files. The wrapper PPO environment is not
 reused for TD3, so dependency changes cannot perturb the published PPO
 reproduction. The smoke path keeps the historical `learning_starts=25000`
 and therefore reproduces an exact 1,000-step prefix rather than introducing a
 different short-run training schedule.
+
+Audit the first remotely verified checkpoint batch for the six-run overnight
+set with:
+
+```bash
+uv run python scripts/audit_td3_batch.py \
+  --tracking-uri http://127.0.0.1:5001 \
+  --experiment-prefix calf-wrapper/td3-night-20260720-v2 \
+  --minimum-checkpoint-step 30000
+```
+
+After training, add `--require-finished` to require all 100 checkpoints and a
+`FINISHED` MLflow status for every run.

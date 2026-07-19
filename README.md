@@ -88,7 +88,9 @@ The [`reproduce/`](./reproduce/) directory contains evaluation bash-scripts for 
 `run/train_td3.py` delegates to the copied CleanRL trainer and locked
 environment from the pinned CALF-Enhance commit. The copied trainer additionally
 saves periodic and final model checkpoints locally and uploads them to the
-MLflow run under `checkpoints/`. This command runs the first
+MLflow run under `checkpoints/`. All artifacts are staged, uploaded in batches,
+and downloaded again for size and SHA-256 verification before a batch is
+acknowledged. This command runs the first
 50,000 steps of the historical robot seed-1 run and checks every deterministic
 MLflow metric against the original run:
 
@@ -127,9 +129,11 @@ uv run python scripts/run_td3_matrix.py \
 ```
 
 Remove `--dry-run` only from a clean pushed commit. The launcher creates one
-detached `tmux` queue per GPU, so each GPU executes one run at a time while the
-assigned seeds proceed sequentially. Every job writes a separate local log
-under `run/logs/` and logs parameters, metrics, and trajectories to MLflow.
+detached `tmux` session per environment/seed pair and starts every session
+immediately, distributing jobs round-robin over the requested GPUs. Every job
+writes a separate local log under `run/logs/` and logs parameters, metrics, and
+trajectories to MLflow. Full runs save a checkpoint every 30,000 steps by
+default (100 checkpoints over 3M steps).
 Use `--smoke --seeds 0` to validate the exact first 1,000-step execution prefix
 for both environments before the full matrix.
 
