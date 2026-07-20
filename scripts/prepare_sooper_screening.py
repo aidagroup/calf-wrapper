@@ -76,7 +76,7 @@ def shortlist(groups, protocol):
     return candidates[: spec["retain"]]
 
 
-def task(candidate, seed, iterations, tracking_uri, experiment_name):
+def task(candidate, seed, iterations, cost_budget, tracking_uri, experiment_name):
     environment = candidate["environment"]
     training_seed = candidate["training_seed"]
     checkpoint_step = candidate["checkpoint_step"]
@@ -107,7 +107,7 @@ def task(candidate, seed, iterations, tracking_uri, experiment_name):
         "policy_updates": 500,
         "batch_size": 256,
         "gamma": 0.99,
-        "budget_margin": 1.05,
+        "cost_budget": cost_budget,
         "pessimism_beta": 2.0,
         "prior_horizon": 50,
         "lambda_explore": 0.1,
@@ -121,12 +121,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--calf-results", type=Path, required=True)
     parser.add_argument("--protocol", type=Path, required=True)
+    parser.add_argument("--budget-calibration", type=Path, required=True)
     parser.add_argument("--matrix-output", type=Path, required=True)
     parser.add_argument("--shortlist-output", type=Path, required=True)
     parser.add_argument("--tracking-uri", required=True)
     parser.add_argument("--experiment-name", required=True)
     args = parser.parse_args()
     protocol = json.loads(args.protocol.read_text())
+    calibration = json.loads(args.budget_calibration.read_text())
+    if calibration.get("format") != "calf-wrapper-sooper-budget-calibration-v1":
+        raise SystemExit("Unsupported budget calibration file")
+    cost_budget = float(calibration["cost_budget"])
     candidates = shortlist(load_groups(args.calf_results), protocol)
     if len(candidates) != protocol["checkpoint_shortlist"]["retain"]:
         raise SystemExit(
@@ -135,7 +140,14 @@ def main() -> None:
         )
     screening = protocol["sooper_screening"]
     tasks = [
-        task(candidate, seed, iterations, args.tracking_uri, args.experiment_name)
+        task(
+            candidate,
+            seed,
+            iterations,
+            cost_budget,
+            args.tracking_uri,
+            args.experiment_name,
+        )
         for candidate in candidates
         for iterations in screening["online_iterations"]
         for seed in screening["training_seeds"]
@@ -148,6 +160,8 @@ def main() -> None:
                 "format": "calf-wrapper-sooper-development-matrix-v1",
                 "protocol": str(args.protocol),
                 "source": str(args.calf_results),
+                "budget_calibration": str(args.budget_calibration),
+                "cost_budget": cost_budget,
                 "tasks": tasks,
             },
             indent=2,

@@ -3,6 +3,16 @@
   "created_before_full_sweep_completion": true,
   "development_matrix": "nab-full-20260720-v1",
   "rate_scale": "unit interval; percentage-valued source columns are divided by 100",
+  "cost_budget_calibration": {
+    "environment": "UnderwaterDrone-v0",
+    "seed_start": 71001,
+    "seed_stop_inclusive": 71100,
+    "gamma": 0.99,
+    "horizon": 1500,
+    "margin": 1.05,
+    "selection_rule": "margin_times_maximum_discounted_prior_cost",
+    "shared_across_all_compared_methods": true
+  },
   "primary_environment": "UnderwaterDrone-v0",
   "rationale": "The underwater task contains a native high-cost region, so its reward and operational cost are defined independently of the baseline implementation.",
   "checkpoint_shortlist": {
