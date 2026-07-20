@@ -28,6 +28,7 @@ ENV_LABEL = {
     "RobotNavigationConstSpeedCatch-v0": "Robot navigation",
 }
 LEGACY_KEYS = {"conservative": "Legacy Conservative", "balanced": "Legacy Balanced", "brave": "Legacy Brave"}
+PDF_METADATA = {"CreationDate": None, "ModDate": None}
 
 
 def sha256(path: Path) -> str:
@@ -208,7 +209,7 @@ def plot_sensitivity(summary: pd.DataFrame, output: Path) -> None:
     handles = [plt.Line2D([0], [0], marker="o", color=colors[m], label=MODE_LABEL[m]) for m in MODE_ORDER]
     handles.append(plt.Line2D([0], [0], marker="s", linestyle="--", color="#333333", label="Goal-reaching rate"))
     fig.legend(handles=handles, loc="outside lower center", ncol=5, frameon=False)
-    fig.savefig(output, bbox_inches="tight")
+    fig.savefig(output, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
 
@@ -235,7 +236,7 @@ def plot_tradeoff(summary: pd.DataFrame, output: Path) -> None:
         axis.margins(x=0.08, y=0.12)
         axis.grid(alpha=0.2)
     axes[0].set_ylabel("Reward gain over backbone")
-    fig.savefig(output, bbox_inches="tight")
+    fig.savefig(output, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
 
@@ -258,7 +259,7 @@ def plot_legacy(matched: pd.DataFrame, output: Path) -> None:
         axis.grid(alpha=0.2)
     axes[0].set_ylabel("Episode return")
     axes[0].legend(frameon=False)
-    fig.savefig(output, bbox_inches="tight")
+    fig.savefig(output, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
 

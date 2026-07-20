@@ -15,6 +15,7 @@ from scipy.stats import wilcoxon
 
 LABELS = {"base": "Bare TD3", "fallback": "Fallback", "calf": "CALF-Wrapper", "sooper": "SOOPER"}
 COLORS = {"base": "#777777", "fallback": "#2c7bb6", "calf": "#009e73", "sooper": "#d55e00"}
+PDF_METADATA = {"CreationDate": None, "ModDate": None}
 
 
 def sha256(path: Path) -> str:
@@ -146,7 +147,7 @@ def plot_learning(curve: pd.DataFrame, output: Path) -> None:
     for axis in axes:
         axis.set_xlabel("Additional online interactions")
         axis.grid(alpha=.2)
-    fig.savefig(output, bbox_inches="tight")
+    fig.savefig(output, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
 
@@ -160,7 +161,7 @@ def plot_comparison(summary: pd.DataFrame, pareto: Path, reliability: Path) -> N
     axis.set_xlim(-.05, 1.05)
     axis.grid(alpha=.2)
     axis.legend(frameon=False)
-    fig.savefig(pareto, bbox_inches="tight")
+    fig.savefig(pareto, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
     fig, axes = plt.subplots(1, 3, figsize=(7.1, 2.35), constrained_layout=True)
@@ -171,7 +172,7 @@ def plot_comparison(summary: pd.DataFrame, pareto: Path, reliability: Path) -> N
         axis.set_ylim(0, 1.05)
         axis.tick_params(axis="x", rotation=28)
         axis.grid(axis="y", alpha=.2)
-    fig.savefig(reliability, bbox_inches="tight")
+    fig.savefig(reliability, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
 
 
