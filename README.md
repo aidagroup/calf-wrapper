@@ -300,6 +300,34 @@ The completed local/remote audit, exact replay verdicts, fresh-training results,
 run IDs, and artifact hashes are in
 [`reports/reproducibility.md`](reports/reproducibility.md).
 
+### Full checkpoint-mode sweep
+
+The preregistered checkpoint and hyperparameter protocol is stored in
+[`experiments/checkpoint-sweep-v1.json`](experiments/checkpoint-sweep-v1.json).
+It evaluates every checkpoint within the published training horizon using the
+base policy and four horizon-normalized CALF modes. The fallback is evaluated
+once per environment because it does not depend on a checkpoint.
+
+Preview the complete task matrix, then launch it from a clean pushed commit:
+
+```sh
+uv run python scripts/run_checkpoint_matrix.py launch \
+  --tracking-uri http://192.168.1.5:5001 \
+  --gpus 0,1 \
+  --dry-run
+
+uv run python scripts/run_checkpoint_matrix.py launch \
+  --tracking-uri http://192.168.1.5:5001 \
+  --gpus 0,1
+```
+
+Each GPU gets a persistent tmux worker. A separate monitor creates the complete
+CSV table after all tasks finish and uploads the protocol, task manifest, raw
+results table, and any failures to a matrix-level MLflow run. Every task-level
+artifact batch and the final matrix batch are downloaded again and verified by
+size and SHA-256. Re-running the same matrix directory resumes from existing
+task summaries.
+
 ## Experiment Tracking
 
 We use [MLflow](https://mlflow.org/) for comprehensive experiment tracking and results visualization. MLflow tracks:

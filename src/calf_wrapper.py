@@ -60,9 +60,11 @@ class CALFWrapper(Wrapper):
         value_decay = value - self.best_value - self.calf_change_rate
         self.best_value = np.where(value_decay >= 0, value, self.best_value)
 
-        is_base_action_applied = (value_decay >= 0) | (
+        deterministic_acceptance = value_decay >= 0
+        probabilistic_acceptance = (
             self.np_rng.random(size=value_decay.shape) < self.relaxprob
         )
+        is_base_action_applied = deterministic_acceptance | probabilistic_acceptance
         action = np.where(
             is_base_action_applied,
             base_action,
@@ -76,14 +78,18 @@ class CALFWrapper(Wrapper):
             for i in range(len(info)):
                 info[i] |= {
                     "calf.relaxprob": np.copy(self.relaxprob),
-                    "calf.decay_happened": (value_decay >= 0)[i, 0],
+                    "calf.decay_happened": deterministic_acceptance[i, 0],
+                    "calf.deterministic_acceptance": deterministic_acceptance[i, 0],
+                    "calf.probabilistic_acceptance": probabilistic_acceptance[i, 0],
                     "calf.base_action_applied": is_base_action_applied[i, 0],
                     "calf.action": action[i, :],
                 }
         else:  # single env
             info |= {
                 "calf.relaxprob": np.copy(self.relaxprob),
-                "calf.decay_happened": value_decay >= 0,
+                "calf.decay_happened": deterministic_acceptance,
+                "calf.deterministic_acceptance": deterministic_acceptance,
+                "calf.probabilistic_acceptance": probabilistic_acceptance,
                 "calf.base_action_applied": is_base_action_applied,
                 "calf.action": action,
             }

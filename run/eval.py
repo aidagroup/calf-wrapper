@@ -1,7 +1,7 @@
 # Main evaluation script
 
 from dataclasses import dataclass
-from typing import Callable, Any, Literal
+from typing import Callable, Any, Literal, Optional
 from pathlib import Path
 import os
 import numpy as np
@@ -10,6 +10,7 @@ import mlflow
 import tempfile
 import json
 import csv
+import shutil
 import tyro
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecEnv
@@ -29,6 +30,12 @@ from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalContro
 from src.controllers.underwaterdrone import UnderwaterDroneNominalController
 from src.envs.underwaterdrone import HOLE_WIDTH, TOP_Y
 from src.models.cleanrl_td3 import CleanRLTD3
+from src.calf_modes import (
+    CalfMode,
+    normalized_acceptance_budget,
+    resolve_calf_mode,
+)
+from src.utils.verified_artifacts import log_verified_artifact_batch
 
 
 @dataclass
@@ -38,6 +45,9 @@ class CalfConfig:
     CALF is a framework that combines learned policy with a stabilizing controller
     for safe reinforcement learning.
     """
+
+    mode: CalfMode = "custom"
+    """Named horizon-aware NAB mode, or custom to use the raw parameters below"""
 
     calf_change_rate: float = 0.01
     """Minimal improvement threshold for update of the best viewed critic"""
@@ -104,6 +114,24 @@ class EvalConfig:
 
     checkpoint_stage: str = "none"
     """Semantic checkpoint stage: none, early, mid, or late"""
+
+    save_episode_data: bool = True
+    """Whether to upload the full step-by-step trajectory in addition to raw trials"""
+
+    result_path: Optional[Path] = None
+    """Optional local JSON summary used by checkpoint-matrix workers"""
+
+    matrix_id: str = "none"
+    """Identifier of the checkpoint sweep that owns this evaluation"""
+
+    task_id: str = "none"
+    """Stable task identifier within a checkpoint sweep"""
+
+    training_seed: Optional[int] = None
+    """Training seed encoded by the evaluated checkpoint"""
+
+    checkpoint_step: Optional[int] = None
+    """Training step encoded by the evaluated checkpoint"""
 
 
 presets = {
@@ -236,6 +264,7 @@ def run_episode(
 ) -> list[dict[str, Any]]:
     obs = env.reset()
     data = []
+    active = np.ones(env.num_envs, dtype=bool)
     for step in range(n_steps):
         action = get_action(obs)
         next_obs, reward, is_done, info = env.step(action)
@@ -247,9 +276,14 @@ def run_episode(
                 "reward": reward,
                 "is_done": is_done,
                 "info": info,
+                "next_obs": next_obs,
+                "active": np.copy(active),
             }
         )
+        active &= ~is_done
         obs = next_obs
+        if not np.any(active):
+            break
     env.close()
     return data
 
@@ -283,7 +317,12 @@ def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
 def trial_successes(env_id: str, data: list[dict[str, Any]]) -> np.ndarray:
     """Return whether each fixed-horizon trial reached its goal at least once."""
 
-    successes = goal_reaching_mask(env_id, data[-1]["obs"])
+    latest_obs = np.copy(data[0]["obs"])
+    for item in data:
+        active = item.get("active", np.ones(len(latest_obs), dtype=bool))
+        next_obs = item.get("next_obs", item["obs"])
+        latest_obs[active] = next_obs[active]
+    successes = goal_reaching_mask(env_id, latest_obs)
     info_key = {
         "UnderwaterDrone-v0": "is_in_hole",
         "RobotNavigationConstSpeedCatch-v0": "goal_reached",
@@ -292,9 +331,35 @@ def trial_successes(env_id: str, data: list[dict[str, Any]]) -> np.ndarray:
         return successes
 
     for item in data:
+        active = item.get("active", np.ones(len(latest_obs), dtype=bool))
         for trial, info in enumerate(item["info"]):
-            successes[trial] |= bool(info.get(info_key, False))
+            if active[trial]:
+                successes[trial] |= bool(info.get(info_key, False))
     return successes
+
+
+def resolve_calf_parameters(config: EvalConfig) -> dict[str, float | str]:
+    if config.calf.mode == "custom":
+        target = normalized_acceptance_budget(
+            config.calf.relaxprob_init,
+            config.calf.relaxprob_factor,
+            config.n_steps,
+        )
+        return {
+            "mode": "custom",
+            "target_acceptance_budget": target,
+            "acceptance_budget_lower_bound": target,
+            "relaxprob_init": config.calf.relaxprob_init,
+            "relaxprob_factor": config.calf.relaxprob_factor,
+        }
+    resolved = resolve_calf_mode(config.calf.mode, config.n_steps)
+    return {
+        "mode": resolved.mode,
+        "target_acceptance_budget": resolved.target_acceptance_budget,
+        "acceptance_budget_lower_bound": resolved.acceptance_budget_lower_bound,
+        "relaxprob_init": resolved.relaxprob_init,
+        "relaxprob_factor": resolved.relaxprob_factor,
+    }
 
 
 def make_env(
@@ -322,6 +387,18 @@ def load_model(config: EvalConfig):
 
 @mlflow_monitoring()
 def main(config: EvalConfig):
+    resolved_calf = resolve_calf_parameters(config)
+    mlflow.log_params(
+        {
+            "calf.resolved_mode": resolved_calf["mode"],
+            "calf.target_acceptance_budget": resolved_calf["target_acceptance_budget"],
+            "calf.acceptance_budget_lower_bound": resolved_calf[
+                "acceptance_budget_lower_bound"
+            ],
+            "calf.resolved_relaxprob_init": resolved_calf["relaxprob_init"],
+            "calf.resolved_relaxprob_factor": resolved_calf["relaxprob_factor"],
+        }
+    )
     if config.record_video:
         video_folder = config.video_folder / (
             config.mlflow.experiment_name
@@ -367,8 +444,8 @@ def main(config: EvalConfig):
             model,
             config.stabilizing_policy,
             calf_change_rate=config.calf.calf_change_rate,
-            relaxprob_init=config.calf.relaxprob_init,
-            relaxprob_factor=config.calf.relaxprob_factor,
+            relaxprob_init=float(resolved_calf["relaxprob_init"]),
+            relaxprob_factor=float(resolved_calf["relaxprob_factor"]),
             seed=config.seed,
         )
         data = run_episode(
@@ -381,31 +458,12 @@ def main(config: EvalConfig):
     env.close()
 
     # Log results
-    final_rewards = np.vstack([item["reward"] for item in data]).sum(axis=0)
+    final_rewards = np.vstack([item["reward"] * item["active"] for item in data]).sum(
+        axis=0
+    )
     for i, reward in enumerate(final_rewards):
         mlflow.log_metric("reward", reward, step=i)
     successes = trial_successes(config.env_id, data)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_filepath = Path(tmp_dir) / f"episode_data.json"
-        with open(tmp_filepath, "w") as f:
-            json.dump(data, f, cls=NumpyEncoder)
-        mlflow.log_artifact(str(tmp_filepath), "episode_data")
-        trial_filepath = Path(tmp_dir) / "trial_metrics.csv"
-        with open(trial_filepath, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["trial", "reward", "goal_reached"])
-            writer.writeheader()
-            for trial, (reward, success) in enumerate(zip(final_rewards, successes)):
-                writer.writerow(
-                    {
-                        "trial": trial,
-                        "reward": float(reward),
-                        "goal_reached": bool(success),
-                    }
-                )
-        mlflow.log_artifact(str(trial_filepath), "raw")
-
-    if config.record_video:
-        mlflow.log_artifact(video_folder, "video")
 
     confidence_interval = float(
         1.96 * np.std(final_rewards) / np.sqrt(len(final_rewards))
@@ -420,8 +478,8 @@ def main(config: EvalConfig):
     calf_infos = [
         info
         for item in data
-        for info in item["info"]
-        if "calf.base_action_applied" in info
+        for active, info in zip(item["active"], item["info"])
+        if active and "calf.base_action_applied" in info
     ]
     if calf_infos:
         base_fraction = float(
@@ -429,7 +487,70 @@ def main(config: EvalConfig):
         )
         metrics["base_action_fraction"] = base_fraction
         metrics["fallback_action_fraction"] = 1.0 - base_fraction
+        metrics["deterministic_acceptance_fraction"] = float(
+            np.mean([info["calf.deterministic_acceptance"] for info in calf_infos])
+        )
+        metrics["probabilistic_acceptance_fraction"] = float(
+            np.mean([info["calf.probabilistic_acceptance"] for info in calf_infos])
+        )
     mlflow.log_metrics(metrics)
+
+    summary = {
+        "environment": config.env_id,
+        "algorithm": config.algorithm,
+        "eval_mode": config.eval_mode,
+        "mode": (
+            str(resolved_calf["mode"])
+            if config.eval_mode == "calf_wrapper"
+            else config.eval_mode
+        ),
+        "checkpoint_stage": config.checkpoint_stage,
+        "matrix_id": config.matrix_id,
+        "task_id": config.task_id,
+        "training_seed": config.training_seed,
+        "checkpoint_step": config.checkpoint_step,
+        "model_path": str(config.model_path),
+        "evaluation_seed": config.seed,
+        "horizon": config.n_steps,
+        "calf": resolved_calf,
+        "metrics": metrics,
+        "mlflow_run_id": mlflow.active_run().info.run_id,
+    }
+    with tempfile.TemporaryDirectory() as artifact_tmp:
+        artifact_root = Path(artifact_tmp)
+        summary_path = artifact_root / "summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+        raw_dir = artifact_root / "raw"
+        raw_dir.mkdir()
+        trial_filepath = raw_dir / "trial_metrics.csv"
+        with open(trial_filepath, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["trial", "reward", "goal_reached", "episode_length"],
+            )
+            writer.writeheader()
+            for trial, (reward, success) in enumerate(zip(final_rewards, successes)):
+                writer.writerow(
+                    {
+                        "trial": trial,
+                        "reward": float(reward),
+                        "goal_reached": bool(success),
+                        "episode_length": int(
+                            sum(item["active"][trial] for item in data)
+                        ),
+                    }
+                )
+        if config.save_episode_data:
+            episode_dir = artifact_root / "episode_data"
+            episode_dir.mkdir()
+            with (episode_dir / "episode_data.json").open("w") as f:
+                json.dump(data, f, cls=NumpyEncoder)
+        if config.record_video and video_folder.exists():
+            shutil.copytree(video_folder, artifact_root / "video")
+        log_verified_artifact_batch(artifact_root)
+    if config.result_path is not None:
+        config.result_path.parent.mkdir(parents=True, exist_ok=True)
+        config.result_path.write_text(json.dumps(summary, indent=2) + "\n")
 
     from pprint import pprint
 
