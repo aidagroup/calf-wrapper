@@ -9,6 +9,7 @@ from run.train_sooper import controller_for
 from scripts.run_sooper_matrix import command, shuffled_shard
 from scripts.prepare_sooper_screening import shortlist
 from scripts.launch_sooper_workers import parse_assignment
+from scripts.select_sooper_scenario import aggregate, identify
 from src.models.cleanrl_td3 import CleanRLActor, CleanRLTwinCritic
 from src.sooper import (
     PriorValueEnsemble,
@@ -217,6 +218,39 @@ def test_screening_shortlist_uses_only_complete_feasible_development_groups():
 
 def test_worker_assignment_preserves_cuda_device_colon():
     assert parse_assignment("2=cuda:1") == (2, "cuda:1")
+
+
+def test_sooper_screening_aggregation_uses_canonical_checkpoint_identity():
+    import pandas as pd
+
+    assert identify(
+        "/mnt/raid0/calf-eval-wrapper/run/artifacts/td3_UnderwaterDrone-v0_2/"
+        "checkpoints/td3_checkpoint_120000_steps.pt"
+    ) == (2, 120000)
+    trials = pd.DataFrame(
+        [
+            {
+                "checkpoint_training_seed": 2,
+                "checkpoint_step": 120000,
+                "online_iterations": 5,
+                "sooper_training_seed": seed,
+                "episode_return": -100.0 + seed,
+                "goal_reached": True,
+                "constraint_satisfied": True,
+                "intervention_fraction": 0.25,
+                "cost_budget": 7.0,
+                "real_interactions": 7500,
+                "offline_prior_interactions": 7500,
+                "wall_clock_seconds": 60.0,
+            }
+            for seed in (1, 2, 3)
+        ]
+    )
+    summary = aggregate(trials).iloc[0]
+    assert summary.n_trials == 3
+    assert summary.mean_reward == pytest.approx(-98.0)
+    assert summary.cost_budget == pytest.approx(7.0)
+    assert summary.gpu_hours_per_training_seed == pytest.approx(1 / 60)
 
 
 @pytest.mark.parametrize(
