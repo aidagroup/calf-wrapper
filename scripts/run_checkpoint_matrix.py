@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import os
+import random
 import shlex
 import subprocess
 import sys
@@ -28,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PROTOCOL = REPO_ROOT / "experiments" / "checkpoint-sweep-v1.json"
 DEFAULT_ARTIFACTS = REPO_ROOT / "run" / "artifacts"
 CALF_MODES = ("conservative", "moderate", "high", "almost_open")
+DEFAULT_TASK_SHUFFLE_SEED = 20260720
 
 
 @dataclass(frozen=True)
@@ -224,9 +226,21 @@ def evaluation_command(
     return command
 
 
+def shuffled_task_shard(
+    tasks: list[Task], worker_index: int, worker_count: int, shuffle_seed: int
+) -> list[Task]:
+    """Return one deterministic shard from a globally shuffled task order."""
+
+    shuffled = list(tasks)
+    random.Random(shuffle_seed).shuffle(shuffled)
+    return shuffled[worker_index::worker_count]
+
+
 def run_worker(args: argparse.Namespace) -> int:
     tasks = read_tasks(args.tasks)
-    assigned = tasks[args.worker_index :: args.worker_count]
+    assigned = shuffled_task_shard(
+        tasks, args.worker_index, args.worker_count, args.shuffle_seed
+    )
     results_dir = args.matrix_dir / "results"
     failures_dir = args.matrix_dir / "failures"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -381,6 +395,7 @@ def start_tmux(
     gpus: list[int],
     workers_per_gpu: int,
     retries: int,
+    shuffle_seed: int,
 ) -> None:
     worker_count = len(gpus) * workers_per_gpu
     log_dir = matrix_dir / "logs"
@@ -406,6 +421,8 @@ def start_tmux(
             str(worker_index),
             "--worker-count",
             str(worker_count),
+            "--shuffle-seed",
+            str(shuffle_seed),
             "--retries",
             str(retries),
         ]
@@ -509,6 +526,9 @@ def parse_args() -> argparse.Namespace:
     launch.add_argument("--gpus", default="0,1")
     launch.add_argument("--workers-per-gpu", type=int, default=1)
     launch.add_argument("--retries", type=int, default=2)
+    launch.add_argument(
+        "--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED
+    )
     launch.add_argument("--smoke", action="store_true")
     launch.add_argument("--dry-run", action="store_true")
     launch.add_argument("--allow-unpushed", action="store_true")
@@ -518,6 +538,9 @@ def parse_args() -> argparse.Namespace:
     worker.add_argument("--device", required=True)
     worker.add_argument("--worker-index", type=int, required=True)
     worker.add_argument("--worker-count", type=int, required=True)
+    worker.add_argument(
+        "--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED
+    )
     worker.add_argument("--retries", type=int, default=2)
 
     monitor = subparsers.add_parser("monitor")
@@ -586,6 +609,7 @@ def main() -> int:
         gpus=gpus,
         workers_per_gpu=args.workers_per_gpu,
         retries=args.retries,
+        shuffle_seed=args.shuffle_seed,
     )
     return 0
 

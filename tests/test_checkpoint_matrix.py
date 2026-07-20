@@ -5,6 +5,7 @@ from scripts.run_checkpoint_matrix import (
     evaluation_command,
     prepare_tasks,
     read_tasks,
+    shuffled_task_shard,
     write_tasks,
 )
 
@@ -59,3 +60,17 @@ def test_task_csv_roundtrip_and_named_mode_command(tmp_path):
     assert command[command.index("--calf.mode") + 1] == "moderate"
     assert command[command.index("--device") + 1] == "cuda:1"
     assert "--no-save-episode-data" in command
+
+
+def test_shuffled_task_shards_are_deterministic_disjoint_and_complete(tmp_path):
+    add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", range(3000, 33000, 3000))
+    tasks = prepare_tasks(
+        protocol(), tmp_path, "matrix", ["pendulum"], ["base", "moderate"]
+    )
+    shards = [shuffled_task_shard(tasks, index, 4, 1234) for index in range(4)]
+
+    assert shards[0] == shuffled_task_shard(tasks, 0, 4, 1234)
+    assert {task.task_id for shard in shards for task in shard} == {
+        task.task_id for task in tasks
+    }
+    assert sum(len(shard) for shard in shards) == len(tasks)
