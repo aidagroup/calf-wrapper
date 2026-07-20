@@ -5,7 +5,7 @@ import pytest
 import torch
 
 import src  # noqa: F401
-from run.train_sooper import controller_for, evaluate
+from run.train_sooper import controller_for, evaluate, restore_torch_rng_states
 from scripts.run_sooper_matrix import command, shuffled_shard, weighted_shard
 from scripts.prepare_sooper_screening import shortlist
 from scripts.launch_sooper_workers import parse_assignment
@@ -276,6 +276,24 @@ def test_screening_shortlist_uses_only_complete_feasible_development_groups():
 
 def test_worker_assignment_preserves_cuda_device_colon():
     assert parse_assignment("2=cuda:1") == (2, "cuda:1")
+
+
+def test_resume_moves_rng_state_back_to_cpu_after_cuda_map_location(monkeypatch):
+    class MappedState:
+        def __init__(self):
+            self.cpu_called = False
+
+        def cpu(self):
+            self.cpu_called = True
+            return torch.zeros(4, dtype=torch.uint8)
+
+    mapped = MappedState()
+    restored = []
+    monkeypatch.setattr(torch, "set_rng_state", restored.append)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    restore_torch_rng_states({"rng": {"torch": mapped, "cuda": None}})
+    assert mapped.cpu_called
+    assert restored[0].device.type == "cpu"
 
 
 def test_sooper_screening_aggregation_uses_canonical_checkpoint_identity():

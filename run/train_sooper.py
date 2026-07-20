@@ -139,6 +139,15 @@ def configure_determinism(seed: int) -> None:
     torch.backends.cudnn.benchmark = False
 
 
+def restore_torch_rng_states(payload: dict[str, Any]) -> None:
+    """Restore RNG tensors after ``map_location`` without device leakage."""
+    torch.set_rng_state(payload["rng"]["torch"].cpu())
+    if payload["rng"]["cuda"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(
+            [state.cpu() for state in payload["rng"]["cuda"]]
+        )
+
+
 def safe_reset(env: gym.Env, seed: int) -> tuple[np.ndarray, dict[str, Any]]:
     observation, info = env.reset(seed=seed)
     return np.asarray(observation, dtype=np.float32), info
@@ -650,9 +659,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
         initialization = payload["metrics"].get("initialization", {})
         random.setstate(payload["rng"]["python"])
         np.random.set_state(payload["rng"]["numpy"])
-        torch.set_rng_state(payload["rng"]["torch"])
-        if payload["rng"]["cuda"] is not None and torch.cuda.is_available():
-            torch.cuda.set_rng_state_all(payload["rng"]["cuda"])
+        restore_torch_rng_states(payload)
         rng = np.random.default_rng()
         rng.bit_generator.state = payload["rng"]["experiment"]
 
@@ -668,9 +675,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
         else:
             random.setstate(payload["rng"]["python"])
             np.random.set_state(payload["rng"]["numpy"])
-            torch.set_rng_state(payload["rng"]["torch"])
-            if payload["rng"]["cuda"] is not None and torch.cuda.is_available():
-                torch.cuda.set_rng_state_all(payload["rng"]["cuda"])
+            restore_torch_rng_states(payload)
         mlflow.set_tags(reproducibility_tags())
         mlflow.set_tags(
             {
