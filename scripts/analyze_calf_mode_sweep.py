@@ -219,10 +219,19 @@ def plot_tradeoff(summary: pd.DataFrame, output: Path) -> None:
         axis.plot(group.goal_reaching_rate, group.reward_gain_mean, color="0.6", linewidth=0.8)
         for mode, row in group.iterrows():
             axis.scatter(row.goal_reaching_rate, row.reward_gain_mean, s=24)
-            axis.annotate(MODE_LABEL[mode].replace("Almost Open", "Open"), (row.goal_reaching_rate, row.reward_gain_mean), xytext=(3, 3), textcoords="offset points", fontsize=6)
+            near_right = row.goal_reaching_rate > 0.9
+            axis.annotate(
+                MODE_LABEL[mode].replace("Almost Open", "Open"),
+                (row.goal_reaching_rate, row.reward_gain_mean),
+                xytext=(-3 if near_right else 3, -7 if near_right else 3),
+                textcoords="offset points",
+                fontsize=6,
+                ha="right" if near_right else "left",
+            )
         axis.axhline(0, color="0.75", linewidth=0.7)
         axis.set_title(ENV_LABEL[environment])
         axis.set_xlabel("Goal-reaching rate")
+        axis.margins(x=0.08, y=0.12)
         axis.grid(alpha=0.2)
     axes[0].set_ylabel("Reward gain over backbone")
     fig.savefig(output, bbox_inches="tight")
