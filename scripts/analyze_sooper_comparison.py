@@ -193,7 +193,7 @@ def write_table(summary: pd.DataFrame, compute: pd.DataFrame, output: Path) -> N
     lines = [
         r"\begin{table*}[t]",
         r"\centering\scriptsize",
-        r"\caption{Frozen held-out comparison on 100 paired underwater-drone initial states. The reward column reports mean $\pm$ standard deviation and the 95\% confidence-interval half-width in brackets. Interaction and compute columns count adaptation beyond the common pretrained TD3 checkpoint.}",
+        r"\caption{Frozen held-out comparison on 100 paired underwater-drone initial states. Reward reports mean $\pm$ standard deviation; brackets give 95\% confidence-interval half-widths for reward and rates. Interaction and compute columns count adaptation beyond the common pretrained TD3 checkpoint.}",
         r"\label{tab:sooper_heldout}",
         r"\begin{tabular}{lrrrrrrr}",
         r"\hline",
@@ -203,8 +203,10 @@ def write_table(summary: pd.DataFrame, compute: pd.DataFrame, output: Path) -> N
     for row in joined.itertuples(index=False):
         lines.append(
             f"{LABELS[row.method]} & {row.mean_reward:.1f} $\\pm$ {row.std_reward:.1f} "
-            f"[$\\pm${row.reward_ci95_half_width:.1f}] & {row.goal_reaching_rate:.3f} & "
-            f"{row.constraint_satisfaction_rate:.3f} & {row.intervention_fraction:.3f} & "
+            f"[$\\pm${row.reward_ci95_half_width:.1f}] & {row.goal_reaching_rate:.3f} "
+            f"[$\\pm${row.goal_ci95_half_width:.3f}] & {row.constraint_satisfaction_rate:.3f} "
+            f"[$\\pm${row.constraint_ci95_half_width:.3f}] & {row.intervention_fraction:.3f} "
+            f"[$\\pm${row.intervention_ci95_half_width:.3f}] & "
             f"{int(row.offline_interactions)} & {int(row.online_interactions)} & "
             f"{row.mean_adaptation_wall_clock_seconds / 60.0:.1f} \\\\"
         )
