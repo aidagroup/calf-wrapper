@@ -659,6 +659,18 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
     mlflow.set_tracking_uri(config.tracking_uri)
     mlflow.set_experiment(config.experiment_name)
     with mlflow.start_run(run_name=config.run_name) as active_run:
+        # MLflow creates a random run identifier and may therefore advance the
+        # process-wide Python RNG.  Establish the experiment RNG boundary only
+        # after the run has been opened so independent and resumed checkpoints
+        # preserve exactly the same RNG state.
+        if resume is None:
+            configure_determinism(config.seed)
+        else:
+            random.setstate(payload["rng"]["python"])
+            np.random.set_state(payload["rng"]["numpy"])
+            torch.set_rng_state(payload["rng"]["torch"])
+            if payload["rng"]["cuda"] is not None and torch.cuda.is_available():
+                torch.cuda.set_rng_state_all(payload["rng"]["cuda"])
         mlflow.set_tags(reproducibility_tags())
         mlflow.set_tags(
             {
