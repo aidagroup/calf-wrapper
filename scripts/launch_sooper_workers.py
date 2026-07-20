@@ -111,9 +111,10 @@ def main() -> None:
                 "command": command,
             }
         )
+    created_at = datetime.now(timezone.utc)
     manifest = {
         "format": "calf-wrapper-sooper-worker-launch-v1",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": created_at.isoformat(),
         "git_branch": branch,
         "git_commit": commit,
         "matrix": str(matrix),
@@ -123,7 +124,8 @@ def main() -> None:
         "sharding": args.sharding,
         "launches": launches,
     }
-    manifest_path = args.result_root / f"launch-{commit[:8]}.json"
+    timestamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
+    manifest_path = args.result_root / f"launch-{commit[:8]}-{timestamp}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
 
