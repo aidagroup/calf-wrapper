@@ -28,6 +28,30 @@ def shuffled_shard(tasks, worker_index, worker_count, shuffle_seed):
     return ordered[worker_index::worker_count]
 
 
+def weighted_shard(tasks, worker_index, worker_count, shuffle_seed):
+    """Deterministically balance estimated iteration cost across workers."""
+    import random
+
+    rng = random.Random(shuffle_seed)
+    ordered = list(tasks)
+    rng.shuffle(ordered)
+    def weight(task):
+        return int(task.get("online_iterations", 1)) * (
+            int(task.get("policy_updates", 100)) + 100
+        )
+
+    ordered.sort(key=weight, reverse=True)
+    shards = [[] for _ in range(worker_count)]
+    loads = [0 for _ in range(worker_count)]
+    for task in ordered:
+        target = min(range(worker_count), key=lambda index: (loads[index], len(shards[index]), index))
+        shards[target].append(task)
+        loads[target] += weight(task)
+    for index, shard in enumerate(shards):
+        random.Random(shuffle_seed + index + 1).shuffle(shard)
+    return shards[worker_index]
+
+
 def command(task, output_dir, device, model_root, resume=None):
     model_path = Path(task["model_path"])
     if not model_path.is_absolute():
@@ -89,15 +113,15 @@ def main():
     parser.add_argument("--worker-index", type=int, default=0)
     parser.add_argument("--worker-count", type=int, default=1)
     parser.add_argument("--shuffle-seed", type=int, default=20260720)
+    parser.add_argument("--sharding", choices=["weighted", "strided"], default="weighted")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--max-tasks", type=int)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     matrix = json.loads(args.matrix.read_text())
     tasks = matrix["tasks"] if isinstance(matrix, dict) else matrix
-    selected = shuffled_shard(
-        tasks, args.worker_index, args.worker_count, args.shuffle_seed
-    )
+    shard = weighted_shard if args.sharding == "weighted" else shuffled_shard
+    selected = shard(tasks, args.worker_index, args.worker_count, args.shuffle_seed)
     if args.max_tasks is not None:
         selected = selected[: args.max_tasks]
     args.result_root.mkdir(parents=True, exist_ok=True)

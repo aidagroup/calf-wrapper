@@ -5,8 +5,8 @@ import pytest
 import torch
 
 import src  # noqa: F401
-from run.train_sooper import controller_for
-from scripts.run_sooper_matrix import command, shuffled_shard
+from run.train_sooper import controller_for, evaluate
+from scripts.run_sooper_matrix import command, shuffled_shard, weighted_shard
 from scripts.prepare_sooper_screening import shortlist
 from scripts.launch_sooper_workers import parse_assignment
 from scripts.select_sooper_scenario import aggregate, identify
@@ -135,6 +135,52 @@ def test_learned_prior_value_heads_drive_constant_time_filter():
     assert decision.intervention
 
 
+def test_vectorized_evaluation_preserves_each_seed_result():
+    from types import SimpleNamespace
+
+    class ZeroPlanner:
+        def action(self, observation):
+            observation = np.asarray(observation)
+            return (
+                np.zeros((1,), dtype=np.float32)
+                if observation.ndim == 1
+                else np.zeros((len(observation), 1), dtype=np.float32)
+            )
+
+    model = constant_model(cost=0.0)
+    values = PriorValueEnsemble(3, 1, ensemble_size=2, hidden=8, device="cpu")
+    for parameter in values.parameters():
+        parameter.data.zero_()
+    values.is_fitted = True
+    config = SimpleNamespace(
+        env_id="Pendulum-v1",
+        seed=17,
+        evaluation_episodes=3,
+        gamma=0.99,
+        pessimism_beta=0.0,
+        prior_horizon=2,
+        horizon=10,
+    )
+    seeds = [901, 902, 903]
+    batched = evaluate(
+        ZeroPlanner(), model, values, ZeroPrior(), config, 100.0, iteration=0, seeds=seeds
+    )
+    separate = [
+        evaluate(
+            ZeroPlanner(), model, values, ZeroPrior(), config, 100.0, iteration=0, seeds=[seed]
+        )[0]
+        for seed in seeds
+    ]
+    for trial, (left, right) in enumerate(zip(batched, separate)):
+        right["trial"] = trial
+        assert left.keys() == right.keys()
+        for key in left:
+            if isinstance(left[key], (float, np.floating)):
+                assert left[key] == pytest.approx(right[key], abs=1e-6)
+            else:
+                assert left[key] == right[key]
+
+
 def test_cleanrl_td3_initialization_is_exact():
     torch.manual_seed(29)
     actor = CleanRLActor(3, 1)
@@ -174,6 +220,18 @@ def test_matrix_shards_are_deterministic_disjoint_and_portable(tmp_path):
     assert shards == [shuffled_shard(tasks, index, 3, 91) for index in range(3)]
     launch = command(tasks[0], tmp_path / "out", "cuda:0", tmp_path)
     assert str((tmp_path / tasks[0]["model_path"]).resolve()) in launch
+
+
+def test_weighted_matrix_shards_balance_online_iterations():
+    tasks = [
+        {"environment": "underwater-drone", "seed": index, "online_iterations": weight}
+        for index, weight in enumerate([20] * 9 + [5] * 9 + [1] * 9)
+    ]
+    shards = [weighted_shard(tasks, index, 12, 20260720) for index in range(12)]
+    assert {task["seed"] for shard in shards for task in shard} == set(range(27))
+    loads = [sum(task["online_iterations"] for task in shard) for shard in shards]
+    assert max(loads) - min(loads) <= 2
+    assert shards == [weighted_shard(tasks, index, 12, 20260720) for index in range(12)]
 
 
 def test_screening_shortlist_uses_only_complete_feasible_development_groups():
@@ -233,6 +291,7 @@ def test_sooper_screening_aggregation_uses_canonical_checkpoint_identity():
                 "checkpoint_training_seed": 2,
                 "checkpoint_step": 120000,
                 "online_iterations": 5,
+                "policy_updates": 100,
                 "sooper_training_seed": seed,
                 "episode_return": -100.0 + seed,
                 "goal_reached": True,

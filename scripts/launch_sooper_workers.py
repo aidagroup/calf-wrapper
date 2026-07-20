@@ -50,6 +50,7 @@ def main() -> None:
         help="Repeat as WORKER_INDEX=DEVICE, for example 0=cuda:0",
     )
     parser.add_argument("--shuffle-seed", type=int, default=20260720)
+    parser.add_argument("--sharding", choices=["weighted", "strided"], default="weighted")
     parser.add_argument("--session-prefix", required=True)
     parser.add_argument("--max-tasks", type=int)
     args = parser.parse_args()
@@ -87,6 +88,8 @@ def main() -> None:
             str(args.worker_count),
             "--shuffle-seed",
             str(args.shuffle_seed),
+            "--sharding",
+            args.sharding,
             "--device",
             device,
         ]
@@ -117,6 +120,7 @@ def main() -> None:
         "matrix_sha256": file_sha256(matrix),
         "worker_count": args.worker_count,
         "shuffle_seed": args.shuffle_seed,
+        "sharding": args.sharding,
         "launches": launches,
     }
     manifest_path = args.result_root / f"launch-{commit[:8]}.json"

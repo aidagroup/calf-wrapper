@@ -297,75 +297,92 @@ def evaluate(
     seeds: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     definition = cost_definition(config.env_id)
-    trials = []
     evaluation_seeds = seeds or [
         config.seed + 1_000_000 + trial
         for trial in range(config.evaluation_episodes)
     ]
-    for trial, seed in enumerate(evaluation_seeds):
-        env = gym.make(config.env_id)
-        observation, _ = safe_reset(env, seed)
-        filter_ = SOOPERSafetyFilter(
-            model,
-            prior,
-            definition,
-            prior_value_model=prior_value_model,
-            budget=budget,
-            gamma=config.gamma,
-            pessimism_beta=config.pessimism_beta,
-            prior_horizon=config.prior_horizon,
-            observation_low=env.observation_space.low,
-            observation_high=env.observation_space.high,
+    envs = [gym.make(config.env_id) for _ in evaluation_seeds]
+    observations = np.stack(
+        [safe_reset(env, seed)[0] for env, seed in zip(envs, evaluation_seeds)]
+    )
+    filter_ = SOOPERSafetyFilter(
+        model,
+        prior,
+        definition,
+        prior_value_model=prior_value_model,
+        budget=budget,
+        gamma=config.gamma,
+        pessimism_beta=config.pessimism_beta,
+        prior_horizon=config.prior_horizon,
+        observation_low=envs[0].observation_space.low,
+        observation_high=envs[0].observation_space.high,
+    )
+    count = len(envs)
+    active = np.ones(count, dtype=bool)
+    total_rewards = np.zeros(count)
+    total_costs = np.zeros(count)
+    interventions = np.zeros(count, dtype=int)
+    reached = np.zeros(count, dtype=bool)
+    lengths = np.zeros(count, dtype=int)
+    predicted_cost_sums = np.zeros(count)
+    expected_cost_maxima = np.full(count, -np.inf)
+    uncertainty_sums = np.zeros(count)
+    for _ in range(config.horizon):
+        indices = np.flatnonzero(active)
+        if not len(indices):
+            break
+        current = observations[indices]
+        proposed = planner.action(current)
+        prior_cost, _, uncertainty = filter_.prior_values_batch(current, proposed)
+        expected = total_costs[indices] + np.power(
+            config.gamma, lengths[indices]
+        ) * prior_cost
+        intervene = expected >= budget
+        prior_actions = np.asarray(prior.get_action(current), dtype=np.float32)
+        actions = np.where(intervene[:, None], prior_actions, proposed)
+        predicted_cost_sums[indices] += prior_cost
+        uncertainty_sums[indices] += uncertainty
+        expected_cost_maxima[indices] = np.maximum(
+            expected_cost_maxima[indices], expected
         )
-        total_reward = 0.0
-        total_cost = 0.0
-        interventions = 0
-        reached = False
-        length = 0
-        predicted_prior_costs = []
-        expected_total_costs = []
-        model_uncertainties = []
-        for step in range(config.horizon):
-            proposed = planner.action(observation)
-            decision = filter_.decide(observation, proposed)
-            predicted_prior_costs.append(decision.predicted_prior_cost)
-            expected_total_costs.append(decision.expected_total_cost)
-            model_uncertainties.append(decision.model_uncertainty)
-            next_observation, reward, terminated, truncated, info = env.step(
-                decision.action
+        interventions[indices] += intervene.astype(int)
+        for local, index in enumerate(indices):
+            next_observation, reward, terminated, truncated, info = envs[index].step(
+                actions[local]
             )
             next_observation = np.asarray(next_observation, dtype=np.float32)
             cost = definition.transition_cost(info, next_observation)
-            filter_.observe_cost(cost)
-            total_reward += float(reward)
-            total_cost += config.gamma**step * cost
-            interventions += int(decision.intervention)
-            reached |= bool(
+            total_rewards[index] += float(reward)
+            total_costs[index] += config.gamma ** lengths[index] * cost
+            lengths[index] += 1
+            reached[index] |= bool(
                 goal_reaching_mask(config.env_id, next_observation[None])[0]
             )
-            observation = next_observation
-            length = step + 1
+            observations[index] = next_observation
             if terminated or truncated:
-                break
+                active[index] = False
+    for env in envs:
         env.close()
-        trials.append(
-            {
-                "iteration": iteration,
-                "trial": trial,
-                "evaluation_seed": seed,
-                "episode_return": total_reward,
-                "discounted_cost": total_cost,
-                "constraint_satisfied": total_cost < budget,
-                "goal_reached": reached,
-                "interventions": interventions,
-                "intervention_fraction": interventions / max(length, 1),
-                "episode_length": length,
-                "mean_predicted_prior_cost": float(np.mean(predicted_prior_costs)),
-                "max_expected_total_cost": float(np.max(expected_total_costs)),
-                "mean_model_uncertainty": float(np.mean(model_uncertainties)),
-            }
-        )
-    return trials
+    return [
+        {
+            "iteration": iteration,
+            "trial": trial,
+            "evaluation_seed": seed,
+            "episode_return": total_rewards[trial],
+            "discounted_cost": total_costs[trial],
+            "constraint_satisfied": total_costs[trial] < budget,
+            "goal_reached": reached[trial],
+            "interventions": interventions[trial],
+            "intervention_fraction": interventions[trial] / max(lengths[trial], 1),
+            "episode_length": lengths[trial],
+            "mean_predicted_prior_cost": predicted_cost_sums[trial]
+            / max(lengths[trial], 1),
+            "max_expected_total_cost": expected_cost_maxima[trial],
+            "mean_model_uncertainty": uncertainty_sums[trial]
+            / max(lengths[trial], 1),
+        }
+        for trial, seed in enumerate(evaluation_seeds)
+    ]
 
 
 def collect_online_episode(

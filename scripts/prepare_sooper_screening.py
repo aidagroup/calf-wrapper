@@ -76,7 +76,15 @@ def shortlist(groups, protocol):
     return candidates[: spec["retain"]]
 
 
-def task(candidate, seed, iterations, cost_budget, tracking_uri, experiment_name):
+def task(
+    candidate,
+    seed,
+    iterations,
+    policy_updates,
+    cost_budget,
+    tracking_uri,
+    experiment_name,
+):
     environment = candidate["environment"]
     training_seed = candidate["training_seed"]
     checkpoint_step = candidate["checkpoint_step"]
@@ -104,7 +112,7 @@ def task(candidate, seed, iterations, cost_budget, tracking_uri, experiment_name
         "replay_capacity": 1000000,
         "model_rollout_batch": 256,
         "model_rollout_horizon": 5,
-        "policy_updates": 500,
+        "policy_updates": policy_updates,
         "batch_size": 256,
         "gamma": 0.99,
         "cost_budget": cost_budget,
@@ -144,12 +152,14 @@ def main() -> None:
             candidate,
             seed,
             iterations,
+            policy_updates,
             cost_budget,
             args.tracking_uri,
             args.experiment_name,
         )
         for candidate in candidates
         for iterations in screening["online_iterations"]
+        for policy_updates in screening["policy_updates"]
         for seed in screening["training_seeds"]
     ]
     args.matrix_output.parent.mkdir(parents=True, exist_ok=True)

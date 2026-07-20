@@ -44,6 +44,7 @@ def collect(result_root: Path) -> tuple[pd.DataFrame, list[dict]]:
                     "checkpoint_step": checkpoint_step,
                     "sooper_training_seed": config["seed"],
                     "online_iterations": config["online_iterations"],
+                    "policy_updates": config["policy_updates"],
                     "real_interactions": summary["real_interactions"],
                     "offline_prior_interactions": summary["offline_prior_interactions"],
                     "wall_clock_seconds": summary["wall_clock_seconds"],
@@ -59,7 +60,12 @@ def collect(result_root: Path) -> tuple[pd.DataFrame, list[dict]]:
 
 def aggregate(trials: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    keys = ["checkpoint_training_seed", "checkpoint_step", "online_iterations"]
+    keys = [
+        "checkpoint_training_seed",
+        "checkpoint_step",
+        "online_iterations",
+        "policy_updates",
+    ]
     for key, group in trials.groupby(keys):
         rows.append(
             {
@@ -96,6 +102,7 @@ def main() -> None:
         len(shortlist)
         * len(protocol["sooper_screening"]["training_seeds"])
         * len(protocol["sooper_screening"]["online_iterations"])
+        * len(protocol["sooper_screening"]["policy_updates"])
     )
     failures = list((args.result_root / "failures").glob("*.json"))
     if failures:
@@ -151,6 +158,7 @@ def main() -> None:
         (trials.checkpoint_training_seed == chosen.checkpoint_training_seed)
         & (trials.checkpoint_step == chosen.checkpoint_step)
         & (trials.online_iterations == chosen.online_iterations)
+        & (trials.policy_updates == chosen.policy_updates)
     ][["sooper_training_seed", "run_dir", "mlflow_run_id"]].drop_duplicates().sort_values("sooper_training_seed")
     held_out = protocol["held_out_confirmation"]
     frozen = {
@@ -184,6 +192,7 @@ def main() -> None:
         },
         "sooper": {
             "online_iterations": int(chosen.online_iterations),
+            "policy_updates": int(chosen.policy_updates),
             "real_interactions_per_training_seed": int(chosen.real_interactions_per_training_seed),
             "offline_interactions_per_training_seed": int(chosen.offline_interactions_per_training_seed),
             "development_reward": float(chosen.mean_reward),
