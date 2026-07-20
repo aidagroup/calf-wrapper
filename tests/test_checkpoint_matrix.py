@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from scripts.run_checkpoint_matrix import (
+    aggregate_results,
     evaluation_command,
     prepare_tasks,
     read_tasks,
@@ -74,3 +75,17 @@ def test_shuffled_task_shards_are_deterministic_disjoint_and_complete(tmp_path):
         task.task_id for task in tasks
     }
     assert sum(len(shard) for shard in shards) == len(tasks)
+
+
+def test_aggregate_ignores_stale_failure_when_result_exists(tmp_path):
+    results = tmp_path / "results"
+    failures = tmp_path / "failures"
+    results.mkdir()
+    failures.mkdir()
+    (results / "task.json").write_text(json.dumps({"task_id": "task"}))
+    (failures / "task.json").write_text(json.dumps({"returncode": 1}))
+
+    _, completed, failed = aggregate_results(tmp_path)
+
+    assert completed == 1
+    assert failed == 0

@@ -250,6 +250,7 @@ def run_worker(args: argparse.Namespace) -> int:
         result_path = results_dir / f"{task.task_id}.json"
         failure_path = failures_dir / f"{task.task_id}.json"
         if result_path.exists():
+            failure_path.unlink(missing_ok=True)
             skipped += 1
             continue
         command = evaluation_command(
@@ -332,9 +333,15 @@ def flatten_result(result: dict[str, Any]) -> dict[str, Any]:
 
 def aggregate_results(matrix_dir: Path) -> tuple[Path, int, int]:
     rows = []
-    for result_path in sorted((matrix_dir / "results").glob("*.json")):
+    result_paths = sorted((matrix_dir / "results").glob("*.json"))
+    for result_path in result_paths:
         rows.append(flatten_result(json.loads(result_path.read_text())))
-    failures = list(sorted((matrix_dir / "failures").glob("*.json")))
+    completed_task_ids = {path.stem for path in result_paths}
+    failures = [
+        path
+        for path in sorted((matrix_dir / "failures").glob("*.json"))
+        if path.stem not in completed_task_ids
+    ]
     output_path = matrix_dir / "checkpoint_mode_results.csv"
     fields = sorted({key for row in rows for key in row})
     temporary = output_path.with_suffix(".csv.tmp")
