@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -85,7 +86,7 @@ def summarize(frame: pd.DataFrame) -> pd.DataFrame:
 def paired_tests(frame: pd.DataFrame) -> pd.DataFrame:
     pairs = [("calf", "sooper"), ("sooper", "base"), ("calf", "base")]
     rows = []
-    for metric in ("episode_return", "goal_reached"):
+    for metric in ("episode_return", "goal_reached", "constraint_satisfied"):
         pivot = frame.pivot(index="evaluation_seed", columns="method", values=metric)
         for left, right in pairs:
             difference = (pivot[left] - pivot[right]).to_numpy(float)
@@ -189,6 +190,39 @@ def compute_table(protocol: dict, screening_root: Path) -> pd.DataFrame:
     ])
 
 
+def preserve_source_tables(protocol_path: Path, held_out_root: Path, output: Path) -> None:
+    """Copy complete selection tables and summarize verified held-out sources."""
+    selection_dir = protocol_path.parent
+    for name in (
+        "sooper_screening_trials.csv",
+        "sooper_screening_summary.csv",
+        "sooper_scenario_candidates.csv",
+        "frozen_held_out_protocol.json",
+    ):
+        shutil.copyfile(selection_dir / name, output / name)
+    shutil.copyfile(
+        held_out_root / "command_manifest.json",
+        output / "held_out_command_manifest.json",
+    )
+    summaries = []
+    for path in sorted(held_out_root.glob("*/summary.json")):
+        payload = json.loads(path.read_text())
+        summaries.append(
+            {
+                "source": str(path.relative_to(held_out_root)),
+                "source_size_bytes": path.stat().st_size,
+                "source_sha256": sha256(path),
+                "mlflow_run_id": payload["mlflow_run_id"],
+                "method": payload.get("method", "sooper"),
+                "training_seed": payload.get("training_seed"),
+                "metrics": payload["metrics"],
+            }
+        )
+    (output / "held_out_verified_run_summaries.json").write_text(
+        json.dumps(summaries, indent=2) + "\n"
+    )
+
+
 def write_table(summary: pd.DataFrame, compute: pd.DataFrame, output: Path) -> None:
     joined = summary.merge(compute, on="method", validate="one_to_one")
     lines = [
@@ -238,7 +272,11 @@ def write_macros(
             rf"\newcommand{{\Sooper{macro_name}ConstraintRate}}{{{row.constraint_satisfaction_rate:.3f}}}",
             rf"\newcommand{{\Sooper{macro_name}Intervention}}{{{row.intervention_fraction:.3f}}}",
         ])
-    for metric, metric_name in (("episode_return", "Reward"), ("goal_reached", "Goal")):
+    for metric, metric_name, digits in (
+        ("episode_return", "Reward", 1),
+        ("goal_reached", "Goal", 3),
+        ("constraint_satisfied", "Constraint", 3),
+    ):
         for alternative, comparison_name in (
             (("calf", "sooper"), "CalfVsSooper"),
             (("sooper", "base"), "SooperVsBase"),
@@ -247,8 +285,8 @@ def write_macros(
             key = f"{alternative[0]}>{alternative[1]}"
             row = by_comparison.loc[(metric, key)]
             lines.extend([
-                rf"\newcommand{{\Sooper{metric_name}{comparison_name}Difference}}{{{row.mean_paired_difference:.1f}}}",
-                rf"\newcommand{{\Sooper{metric_name}{comparison_name}CI}}{{{row.difference_ci95_half_width:.1f}}}",
+                rf"\newcommand{{\Sooper{metric_name}{comparison_name}Difference}}{{{row.mean_paired_difference:.{digits}f}}}",
+                rf"\newcommand{{\Sooper{metric_name}{comparison_name}CI}}{{{row.difference_ci95_half_width:.{digits}f}}}",
                 rf"\newcommand{{\Sooper{metric_name}{comparison_name}PValue}}{{{row.holm_adjusted_p:.3g}}}",
             ])
     lines.extend([
@@ -275,6 +313,7 @@ def main() -> None:
     tests = paired_tests(held_out)
     curve = learning_curve(protocol, args.screening_root)
     compute = compute_table(protocol, args.screening_root)
+    preserve_source_tables(args.protocol, args.held_out_root, args.output_dir)
     held_out.to_csv(args.output_dir / "held_out_paired_trials.csv", index=False)
     raw_sooper.to_csv(args.output_dir / "held_out_sooper_all_training_seeds.csv", index=False)
     summary.to_csv(args.output_dir / "held_out_method_summary.csv", index=False)
