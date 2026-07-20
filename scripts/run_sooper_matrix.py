@@ -28,7 +28,10 @@ def shuffled_shard(tasks, worker_index, worker_count, shuffle_seed):
     return ordered[worker_index::worker_count]
 
 
-def command(task, output_dir, device, resume=None):
+def command(task, output_dir, device, model_root, resume=None):
+    model_path = Path(task["model_path"])
+    if not model_path.is_absolute():
+        model_path = (model_root / model_path).resolve()
     cmd = [
         sys.executable,
         "run/train_sooper.py",
@@ -36,7 +39,7 @@ def command(task, output_dir, device, resume=None):
         "--algorithm",
         task["algorithm"],
         "--model-path",
-        task["model_path"],
+        str(model_path),
         "--seed",
         str(task["seed"]),
         "--device",
@@ -77,6 +80,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix", type=Path, required=True)
     parser.add_argument("--result-root", type=Path, required=True)
+    parser.add_argument(
+        "--model-root",
+        type=Path,
+        default=REPO_ROOT,
+        help="Root used to resolve relative checkpoint paths in the matrix",
+    )
     parser.add_argument("--worker-index", type=int, default=0)
     parser.add_argument("--worker-count", type=int, default=1)
     parser.add_argument("--shuffle-seed", type=int, default=20260720)
@@ -102,7 +111,7 @@ def main():
             continue
         checkpoints = sorted((output_dir / "checkpoints").glob("*.pt"))
         resume = checkpoints[-1] if checkpoints else None
-        cmd = command(task, output_dir, args.device, resume)
+        cmd = command(task, output_dir, args.device, args.model_root, resume)
         if args.dry_run:
             print(json.dumps({"task_id": identifier, "command": cmd}))
             continue

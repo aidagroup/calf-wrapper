@@ -57,8 +57,13 @@ matrix is distributed deterministically after a seeded shuffle:
 uv run python scripts/run_sooper_matrix.py \
   --matrix configs/sooper/smoke.json \
   --result-root run/artifacts/sooper/smoke \
+  --model-root /mnt/raid0/calf-eval-wrapper \
   --worker-index 0 --worker-count 1 --shuffle-seed 20260720 --device cuda:0
 ```
+
+Matrix checkpoint paths may be relative to `--model-root`; local and gor
+workers can therefore consume the same committed matrix while resolving
+checkpoints from their respective artifact mirrors.
 
 Interrupted tasks resume from their newest local checkpoint.  Each checkpoint
 contains world-model, actor/critics, optimizers, real and model replay buffers,
@@ -77,6 +82,9 @@ uv run python run/eval_sooper.py \
   --experiment-name calf-wrapper/sooper/held-out \
   --run-name ENV-CHECKPOINT-held-out
 ```
+
+Bare-backbone, fallback, and CALF controls are evaluated with the same explicit
+seed list and resolved cost budget through `run/eval_comparison_controls.py`.
 
 The complete screening table is retained.  Environment/checkpoint/mode
 selection is performed only on screening results; held-out seeds are used once

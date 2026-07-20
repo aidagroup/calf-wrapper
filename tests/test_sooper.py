@@ -6,6 +6,7 @@ import torch
 
 import src  # noqa: F401
 from run.train_sooper import controller_for
+from scripts.run_sooper_matrix import command, shuffled_shard
 from src.models.cleanrl_td3 import CleanRLActor, CleanRLTwinCritic
 from src.sooper import (
     PriorValueEnsemble,
@@ -150,6 +151,26 @@ def test_cleanrl_td3_initialization_is_exact():
     actual_q1, actual_q2 = planner.critic(observations, actions)
     torch.testing.assert_close(actual_q1, expected_q1)
     torch.testing.assert_close(actual_q2, expected_q2)
+
+
+def test_matrix_shards_are_deterministic_disjoint_and_portable(tmp_path):
+    tasks = [
+        {
+            "environment": "pendulum",
+            "algorithm": "ppo",
+            "model_path": f"checkpoints/model-{index}.zip",
+            "seed": index,
+            "tracking_uri": "file:///tmp/mlruns",
+            "experiment_name": "test",
+        }
+        for index in range(12)
+    ]
+    shards = [shuffled_shard(tasks, index, 3, 91) for index in range(3)]
+    assert sum(map(len, shards)) == len(tasks)
+    assert {task["seed"] for shard in shards for task in shard} == set(range(12))
+    assert shards == [shuffled_shard(tasks, index, 3, 91) for index in range(3)]
+    launch = command(tasks[0], tmp_path / "out", "cuda:0", tmp_path)
+    assert str((tmp_path / tasks[0]["model_path"]).resolve()) in launch
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,7 @@
     {
       "environment": "pendulum",
       "algorithm": "ppo",
-      "model_path": "/mnt/raid0/calf-eval-wrapper/run/artifacts/ppo_Pendulum-v1_9/checkpoints/ppo_checkpoint_102000_steps.zip",
+      "model_path": "run/artifacts/ppo_Pendulum-v1_9/checkpoints/ppo_checkpoint_102000_steps.zip",
       "seed": 123,
       "tracking_uri": "http://127.0.0.1:5001",
       "experiment_name": "calf-wrapper/sooper/smoke",
