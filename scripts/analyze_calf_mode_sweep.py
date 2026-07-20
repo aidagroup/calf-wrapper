@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -314,6 +315,7 @@ def main() -> None:
     data = canonicalize(args.results, args.expected_rows)
     summary = summarize(data)
     matched = matched_legacy(data, args.legacy_pendulum, args.legacy_cartpole)
+    shutil.copyfile(args.results, args.output_dir / "calf_matrix_all_tasks.csv")
     data.to_csv(args.output_dir / "calf_checkpoint_mode_results.csv", index=False)
     summary.to_csv(args.output_dir / "calf_mode_summary.csv", index=False)
     matched.to_csv(args.output_dir / "calf_legacy_new_matched.csv", index=False)
