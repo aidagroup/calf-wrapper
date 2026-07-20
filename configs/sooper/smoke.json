@@ -1,0 +1,30 @@
+{
+  "format": "calf-wrapper-sooper-matrix-v1",
+  "tasks": [
+    {
+      "environment": "pendulum",
+      "algorithm": "ppo",
+      "model_path": "/mnt/raid0/calf-eval-wrapper/run/artifacts/ppo_Pendulum-v1_9/checkpoints/ppo_checkpoint_102000_steps.zip",
+      "seed": 123,
+      "tracking_uri": "http://127.0.0.1:5001",
+      "experiment_name": "calf-wrapper/sooper/smoke",
+      "run_name": "sooper-smoke-pendulum-123",
+      "horizon": 20,
+      "offline_prior_episodes": 1,
+      "online_iterations": 1,
+      "real_episodes_per_iteration": 1,
+      "evaluation_episodes": 1,
+      "ensemble_size": 2,
+      "model_epochs": 1,
+      "model_batch_size": 16,
+      "behavior_clone_epochs": 1,
+      "replay_capacity": 1000,
+      "model_rollout_batch": 4,
+      "model_rollout_horizon": 1,
+      "policy_updates": 1,
+      "batch_size": 4,
+      "prior_horizon": 2,
+      "checkpoint_every": 1
+    }
+  ]
+}
