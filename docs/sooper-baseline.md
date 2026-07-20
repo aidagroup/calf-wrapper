@@ -89,6 +89,24 @@ uv run python run/eval_sooper.py \
 Bare-backbone, fallback, and CALF controls are evaluated with the same explicit
 seed list and resolved cost budget through `run/eval_comparison_controls.py`.
 
+For a frozen evaluation-time reward stress test, pass the same non-default
+underwater penalty to every method without retraining or changing the cost
+budget:
+
+```bash
+uv run python scripts/run_frozen_heldout.py \
+  --protocol RUN/frozen_held_out_protocol.json \
+  --screening-root RUN/screening-v1 \
+  --model-root /mnt/raid0/calf-eval-wrapper \
+  --output-root RUN/held-out-penalty50-v1 \
+  --device cuda:0 --underwater-intrusion-penalty 50 \
+  --tracking-uri http://192.168.1.5:5001 \
+  --experiment-name calf-wrapper/sooper/held-out-penalty50-v1
+```
+
+The raw trial tables record the undiscounted intrusion-step count, so the
+changed return can be audited independently of the discounted SOOPER cost.
+
 The complete screening table is retained.  Environment/checkpoint/mode
 selection is performed only on screening results; held-out seeds are used once
 for confirmation.

@@ -35,3 +35,27 @@ def test_added_environment_reset_is_seeded():
         second, _ = env.reset(seed=7)
         np.testing.assert_array_equal(first, second)
         env.close()
+
+
+def test_underwater_intrusion_penalty_changes_only_reward():
+    common = {"init_x": 0.0, "init_y": 2.0}
+    original = gym.make("UnderwaterDrone-v0", high_cost_penalty=5.0, **common)
+    stress = gym.make("UnderwaterDrone-v0", high_cost_penalty=50.0, **common)
+    original_observation, _ = original.reset(seed=17)
+    stress_observation, _ = stress.reset(seed=17)
+    np.testing.assert_array_equal(original_observation, stress_observation)
+
+    action = np.zeros(2, dtype=np.float32)
+    original_next, original_reward, *original_done = original.step(action)
+    stress_next, stress_reward, *stress_done = stress.step(action)
+
+    np.testing.assert_array_equal(original_next, stress_next)
+    assert original_done == stress_done
+    assert stress_reward == pytest.approx(original_reward - 45.0)
+    original.close()
+    stress.close()
+
+
+def test_underwater_intrusion_penalty_must_be_non_negative():
+    with pytest.raises(ValueError, match="must be non-negative"):
+        gym.make("UnderwaterDrone-v0", high_cost_penalty=-1.0)

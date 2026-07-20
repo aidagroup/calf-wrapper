@@ -208,6 +208,7 @@ class UnderwaterDroneEnv(gym.Env):
         seed: Optional[int] = None,
         init_x=None,
         init_y=None,
+        high_cost_penalty: float = 5.0,
     ):
         # Define observation space
         # State is (x, y, theta, v_x, v_y, omega)
@@ -237,6 +238,9 @@ class UnderwaterDroneEnv(gym.Env):
         )
         self.init_x = init_x
         self.init_y = init_y
+        if high_cost_penalty < 0:
+            raise ValueError("high_cost_penalty must be non-negative")
+        self.high_cost_penalty = float(high_cost_penalty)
         self.render_mode = render_mode
         self.screen = None
         self.clock = None
@@ -430,7 +434,7 @@ class UnderwaterDroneEnv(gym.Env):
             - 0.05 * self.drone.v_x**2
             - 0.05 * self.drone.v_y**2
             - 0.01 * self.drone.omega**2
-            - 5 * (1 if self._is_in_high_cost_area() else 0)
+            - self.high_cost_penalty * (1 if self._is_in_high_cost_area() else 0)
         )
 
     def _get_obs(self) -> np.ndarray:

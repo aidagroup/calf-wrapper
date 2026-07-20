@@ -39,9 +39,7 @@ def sha256(path: Path) -> str:
 
 @torch.no_grad()
 def policy_value(base, observation: np.ndarray) -> float:
-    tensor = torch.as_tensor(
-        observation[None], dtype=torch.float32, device=base.device
-    )
+    tensor = torch.as_tensor(observation[None], dtype=torch.float32, device=base.device)
     if isinstance(base, CleanRLTD3):
         action = base.actor(tensor)
         q1, q2 = base.critic(tensor, action)
@@ -64,19 +62,26 @@ def evaluate_controls(
     relaxprob_init: float,
     relaxprob_factor: float,
     calf_change_rate: float,
+    underwater_intrusion_penalty: float = 5.0,
 ) -> list[dict]:
     base = load_base_policy(algorithm, str(model_path), device, seeds[0])
     prior = controller_for(environment)
     definition = cost_definition(env_id)
     rows = []
     for trial, seed in enumerate(seeds):
-        env = gym.make(env_id)
+        env_kwargs = (
+            {"high_cost_penalty": underwater_intrusion_penalty}
+            if env_id == "UnderwaterDrone-v0"
+            else {}
+        )
+        env = gym.make(env_id, **env_kwargs)
         observation, _ = env.reset(seed=seed)
         observation = np.asarray(observation, dtype=np.float32)
         rng = np.random.default_rng(seed)
         best_value = policy_value(base, observation)
         total_reward = 0.0
         discounted_cost = 0.0
+        intrusion_steps = 0
         reached = False
         interventions = 0
         deterministic_accepts = 0
@@ -114,6 +119,7 @@ def evaluate_controls(
             cost = definition.transition_cost(info, next_observation)
             total_reward += float(reward)
             discounted_cost += gamma**step * cost
+            intrusion_steps += int(cost)
             reached |= bool(goal_reaching_mask(env_id, next_observation[None])[0])
             observation = next_observation
             if terminated or truncated:
@@ -127,6 +133,7 @@ def evaluate_controls(
                 "evaluation_seed": seed,
                 "episode_return": total_reward,
                 "discounted_cost": discounted_cost,
+                "intrusion_steps": intrusion_steps,
                 "constraint_satisfied": discounted_cost < cost_budget,
                 "goal_reached": reached,
                 "interventions": interventions,
@@ -142,9 +149,10 @@ def evaluate_controls(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("environment", choices=[
-        "pendulum", "cartpole", "underwater-drone", "robot-navigation"
-    ])
+    parser.add_argument(
+        "environment",
+        choices=["pendulum", "cartpole", "underwater-drone", "robot-navigation"],
+    )
     parser.add_argument("--env-id", required=True)
     parser.add_argument("--algorithm", choices=["ppo", "cleanrl_td3"], required=True)
     parser.add_argument("--model-path", type=Path, required=True)
@@ -157,6 +165,7 @@ def main() -> None:
     parser.add_argument("--relaxprob-init", type=float, default=1.0)
     parser.add_argument("--relaxprob-factor", type=float, default=1.0)
     parser.add_argument("--calf-change-rate", type=float, default=0.01)
+    parser.add_argument("--underwater-intrusion-penalty", type=float, default=5.0)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--tracking-uri", required=True)
     parser.add_argument("--experiment-name", required=True)
@@ -178,6 +187,7 @@ def main() -> None:
         relaxprob_init=args.relaxprob_init,
         relaxprob_factor=args.relaxprob_factor,
         calf_change_rate=args.calf_change_rate,
+        underwater_intrusion_penalty=args.underwater_intrusion_penalty,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     trial_path = args.output_dir / "held_out_trials.csv"
@@ -196,6 +206,7 @@ def main() -> None:
         "model_sha256": sha256(args.model_path),
         "held_out_seeds": seeds,
         "cost_budget": args.cost_budget,
+        "underwater_intrusion_penalty": args.underwater_intrusion_penalty,
         "calf": {
             "relaxprob_init": args.relaxprob_init,
             "relaxprob_factor": args.relaxprob_factor,
@@ -235,6 +246,7 @@ def main() -> None:
                 "relaxprob_init": args.relaxprob_init,
                 "relaxprob_factor": args.relaxprob_factor,
                 "calf_change_rate": args.calf_change_rate,
+                "underwater_intrusion_penalty": args.underwater_intrusion_penalty,
             }
         )
         mlflow.log_metrics(summary["metrics"])

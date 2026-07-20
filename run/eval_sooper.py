@@ -83,6 +83,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--seeds", required=True, help="Comma-separated held-out seeds")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--underwater-intrusion-penalty", type=float, default=5.0)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--tracking-uri", required=True)
     parser.add_argument("--experiment-name", required=True)
@@ -102,6 +103,7 @@ def main() -> None:
         budget,
         iteration=iteration,
         seeds=seeds,
+        underwater_intrusion_penalty=args.underwater_intrusion_penalty,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     trial_path = args.output_dir / "held_out_trials.csv"
@@ -119,6 +121,7 @@ def main() -> None:
         "training_seed": config.seed,
         "held_out_seeds": seeds,
         "cost_budget": budget,
+        "underwater_intrusion_penalty": args.underwater_intrusion_penalty,
         "metrics": {
             "mean_reward": float(returns.mean()),
             "std_reward": float(returns.std()),
@@ -156,6 +159,7 @@ def main() -> None:
                 "training_seed": config.seed,
                 "held_out_seeds": args.seeds,
                 "cost_budget": budget,
+                "underwater_intrusion_penalty": args.underwater_intrusion_penalty,
             }
         )
         mlflow.log_metrics(summary["metrics"])

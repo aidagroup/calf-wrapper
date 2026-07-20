@@ -143,9 +143,7 @@ def restore_torch_rng_states(payload: dict[str, Any]) -> None:
     """Restore RNG tensors after ``map_location`` without device leakage."""
     torch.set_rng_state(payload["rng"]["torch"].cpu())
     if payload["rng"]["cuda"] is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(
-            [state.cpu() for state in payload["rng"]["cuda"]]
-        )
+        torch.cuda.set_rng_state_all([state.cpu() for state in payload["rng"]["cuda"]])
 
 
 def safe_reset(env: gym.Env, seed: int) -> tuple[np.ndarray, dict[str, Any]]:
@@ -304,13 +302,18 @@ def evaluate(
     *,
     iteration: int,
     seeds: list[int] | None = None,
+    underwater_intrusion_penalty: float = 5.0,
 ) -> list[dict[str, Any]]:
     definition = cost_definition(config.env_id)
     evaluation_seeds = seeds or [
-        config.seed + 1_000_000 + trial
-        for trial in range(config.evaluation_episodes)
+        config.seed + 1_000_000 + trial for trial in range(config.evaluation_episodes)
     ]
-    envs = [gym.make(config.env_id) for _ in evaluation_seeds]
+    env_kwargs = (
+        {"high_cost_penalty": underwater_intrusion_penalty}
+        if config.env_id == "UnderwaterDrone-v0"
+        else {}
+    )
+    envs = [gym.make(config.env_id, **env_kwargs) for _ in evaluation_seeds]
     observations = np.stack(
         [safe_reset(env, seed)[0] for env, seed in zip(envs, evaluation_seeds)]
     )
@@ -330,6 +333,7 @@ def evaluate(
     active = np.ones(count, dtype=bool)
     total_rewards = np.zeros(count)
     total_costs = np.zeros(count)
+    intrusion_steps = np.zeros(count, dtype=int)
     interventions = np.zeros(count, dtype=int)
     reached = np.zeros(count, dtype=bool)
     lengths = np.zeros(count, dtype=int)
@@ -343,9 +347,9 @@ def evaluate(
         current = observations[indices]
         proposed = planner.action(current)
         prior_cost, _, uncertainty = filter_.prior_values_batch(current, proposed)
-        expected = total_costs[indices] + np.power(
-            config.gamma, lengths[indices]
-        ) * prior_cost
+        expected = (
+            total_costs[indices] + np.power(config.gamma, lengths[indices]) * prior_cost
+        )
         intervene = expected >= budget
         prior_actions = np.asarray(prior.get_action(current), dtype=np.float32)
         actions = np.where(intervene[:, None], prior_actions, proposed)
@@ -363,6 +367,7 @@ def evaluate(
             cost = definition.transition_cost(info, next_observation)
             total_rewards[index] += float(reward)
             total_costs[index] += config.gamma ** lengths[index] * cost
+            intrusion_steps[index] += int(cost)
             lengths[index] += 1
             reached[index] |= bool(
                 goal_reaching_mask(config.env_id, next_observation[None])[0]
@@ -379,6 +384,7 @@ def evaluate(
             "evaluation_seed": seed,
             "episode_return": total_rewards[trial],
             "discounted_cost": total_costs[trial],
+            "intrusion_steps": intrusion_steps[trial],
             "constraint_satisfied": total_costs[trial] < budget,
             "goal_reached": reached[trial],
             "interventions": interventions[trial],
@@ -387,8 +393,7 @@ def evaluate(
             "mean_predicted_prior_cost": predicted_cost_sums[trial]
             / max(lengths[trial], 1),
             "max_expected_total_cost": expected_cost_maxima[trial],
-            "mean_model_uncertainty": uncertainty_sums[trial]
-            / max(lengths[trial], 1),
+            "mean_model_uncertainty": uncertainty_sums[trial] / max(lengths[trial], 1),
         }
         for trial, seed in enumerate(evaluation_seeds)
     ]

@@ -28,6 +28,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--tracking-uri", required=True)
     parser.add_argument("--experiment-name", required=True)
+    parser.add_argument("--underwater-intrusion-penalty", type=float, default=5.0)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -48,45 +49,78 @@ def main() -> None:
             raise SystemExit(f"Missing SOOPER checkpoint in {run_dir}")
         output = args.output_root / f"sooper-seed-{run['sooper_training_seed']}"
         command = [
-            "uv", "run", "python", "run/eval_sooper.py",
-            "--checkpoint", str(checkpoints[-1]),
-            "--seeds", seeds,
-            "--device", args.device,
-            "--output-dir", str(output),
-            "--tracking-uri", args.tracking_uri,
-            "--experiment-name", args.experiment_name,
-            "--run-name", f"sooper-seed-{run['sooper_training_seed']}-held-out",
+            "uv",
+            "run",
+            "python",
+            "run/eval_sooper.py",
+            "--checkpoint",
+            str(checkpoints[-1]),
+            "--seeds",
+            seeds,
+            "--device",
+            args.device,
+            "--underwater-intrusion-penalty",
+            str(args.underwater_intrusion_penalty),
+            "--output-dir",
+            str(output),
+            "--tracking-uri",
+            args.tracking_uri,
+            "--experiment-name",
+            args.experiment_name,
+            "--run-name",
+            f"sooper-seed-{run['sooper_training_seed']}-held-out",
         ]
         records.append(command_record(command, output))
 
     common = [
         "underwater-drone",
-        "--env-id", protocol["env_id"],
-        "--algorithm", protocol["algorithm"],
-        "--model-path", str(base_checkpoint),
-        "--seeds", seeds,
-        "--device", args.device,
-        "--horizon", str(protocol["horizon"]),
-        "--gamma", str(protocol["gamma"]),
-        "--cost-budget", str(protocol["cost_budget"]),
-        "--tracking-uri", args.tracking_uri,
-        "--experiment-name", args.experiment_name,
+        "--env-id",
+        protocol["env_id"],
+        "--algorithm",
+        protocol["algorithm"],
+        "--model-path",
+        str(base_checkpoint),
+        "--seeds",
+        seeds,
+        "--device",
+        args.device,
+        "--horizon",
+        str(protocol["horizon"]),
+        "--gamma",
+        str(protocol["gamma"]),
+        "--cost-budget",
+        str(protocol["cost_budget"]),
+        "--tracking-uri",
+        args.tracking_uri,
+        "--experiment-name",
+        args.experiment_name,
+        "--underwater-intrusion-penalty",
+        str(args.underwater_intrusion_penalty),
     ]
     for method in ("base", "fallback", "calf"):
         output = args.output_root / method
         command = [
-            "uv", "run", "python", "run/eval_comparison_controls.py",
+            "uv",
+            "run",
+            "python",
+            "run/eval_comparison_controls.py",
             *common,
-            "--method", method,
-            "--output-dir", str(output),
-            "--run-name", f"{method}-held-out",
+            "--method",
+            method,
+            "--output-dir",
+            str(output),
+            "--run-name",
+            f"{method}-held-out",
         ]
         if method == "calf":
             command.extend(
                 [
-                    "--relaxprob-init", str(protocol["calf"]["p0"]),
-                    "--relaxprob-factor", str(protocol["calf"]["lambda"]),
-                    "--calf-change-rate", str(protocol["calf"]["change_rate"]),
+                    "--relaxprob-init",
+                    str(protocol["calf"]["p0"]),
+                    "--relaxprob-factor",
+                    str(protocol["calf"]["lambda"]),
+                    "--calf-change-rate",
+                    str(protocol["calf"]["change_rate"]),
                 ]
             )
         records.append(command_record(command, output))
@@ -99,6 +133,7 @@ def main() -> None:
         "source_commit": commit,
         "protocol": str(args.protocol),
         "protocol_payload": protocol,
+        "underwater_intrusion_penalty": args.underwater_intrusion_penalty,
         "commands": records,
     }
     (args.output_root / "command_manifest.json").write_text(
@@ -107,7 +142,9 @@ def main() -> None:
     if args.dry_run:
         print(json.dumps(manifest, indent=2))
         return
-    if subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True).stdout:
+    if subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
+    ).stdout:
         raise SystemExit("Refusing held-out evaluation from a dirty working tree")
     for record in records:
         output = Path(record["output_dir"])
