@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,9 +30,7 @@ def shuffled_shard(tasks, worker_index, worker_count, shuffle_seed):
 
 def command(task, output_dir, device, resume=None):
     cmd = [
-        "uv",
-        "run",
-        "python",
+        sys.executable,
         "run/train_sooper.py",
         task["environment"],
         "--algorithm",
