@@ -6,7 +6,14 @@ import torch
 
 import src  # noqa: F401
 from run.train_sooper import controller_for
-from src.sooper import ProbabilisticEnsemble, SOOPERSafetyFilter, cost_definition
+from src.models.cleanrl_td3 import CleanRLActor, CleanRLTwinCritic
+from src.sooper import (
+    PriorValueEnsemble,
+    ProbabilisticEnsemble,
+    SOOPERSafetyFilter,
+    TD3Planner,
+    cost_definition,
+)
 
 
 @pytest.mark.parametrize(
@@ -97,6 +104,52 @@ def test_world_model_fit_is_seed_reproducible():
         states.append({key: value.clone() for key, value in model.state_dict().items()})
     for key in states[0]:
         torch.testing.assert_close(states[0][key], states[1][key], rtol=0, atol=0)
+
+
+def test_learned_prior_value_heads_drive_constant_time_filter():
+    torch.manual_seed(13)
+    values = PriorValueEnsemble(3, 1, ensemble_size=2, hidden=8, device="cpu")
+    for parameter in values.parameters():
+        parameter.data.zero_()
+    values.is_fitted = True
+    model = constant_model(cost=0.0)
+    filter_ = SOOPERSafetyFilter(
+        model,
+        ZeroPrior(),
+        cost_definition("Pendulum-v1"),
+        prior_value_model=values,
+        budget=1.0,
+        pessimism_beta=0.0,
+        prior_horizon=100,
+    )
+    decision = filter_.decide(
+        np.array([1.0, 0.0, 0.0], dtype=np.float32),
+        np.array([0.5], dtype=np.float32),
+    )
+    # softplus(0) * cost_scale is above the budget; direct Q evaluation should
+    # therefore intervene independently of the unused rollout horizon.
+    assert decision.intervention
+
+
+def test_cleanrl_td3_initialization_is_exact():
+    torch.manual_seed(29)
+    actor = CleanRLActor(3, 1)
+    critic = CleanRLTwinCritic(3, 1)
+    actor.action_scale.fill_(2.0)
+    planner = TD3Planner.create(
+        3,
+        np.array([-2.0], dtype=np.float32),
+        np.array([2.0], dtype=np.float32),
+        "cpu",
+    )
+    planner.initialize_from_cleanrl(actor, critic)
+    observations = torch.randn(7, 3)
+    actions = torch.randn(7, 1).clamp(-2, 2)
+    torch.testing.assert_close(planner.actor(observations), actor(observations))
+    expected_q1, expected_q2 = critic(observations, actions)
+    actual_q1, actual_q2 = planner.critic(observations, actions)
+    torch.testing.assert_close(actual_q1, expected_q1)
+    torch.testing.assert_close(actual_q2, expected_q2)
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,9 @@ The primary references are the [paper](https://arxiv.org/abs/2601.19612), the
   ensemble-pessimistic prior cost-to-go is below the fixed budget.
 - `ProbabilisticEnsemble` models state deltas, rewards, and costs.  Bootstrap
   disagreement estimates epistemic uncertainty.
+- `PriorValueEnsemble` performs fitted policy evaluation of the conservative
+  controller and provides the pessimistic backup reward and cost heads
+  (`Qr`/`Qc`) used by the official implementation.
 - Model-generated rollouts terminate whenever the same cost criterion would
   invoke the prior in the real environment.  The terminal reward is the
   pessimistic predicted reward-to-go of the prior.
@@ -23,7 +26,9 @@ The primary references are the [paper](https://arxiv.org/abs/2601.19612), the
   replay, following the MBPO-style practical implementation in the paper.
 - The existing CALF fallback controller is the conservative policy prior.  The
   learned actor is initialized by distilling the selected bare-backbone
-  checkpoint on prior-rollout states.
+  checkpoint on prior-rollout states for PPO.  For the CleanRL TD3 tasks, the
+  matching actor and twin-critic architectures permit an exact state copy, so
+  online learning starts bit-for-bit from the selected bare backbone.
 
 ## Deliberate implementation-level differences
 

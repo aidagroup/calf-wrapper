@@ -8,12 +8,19 @@ termination with the prior's terminal value.
 
 from .costs import CostDefinition, cost_definition
 from .filter import SOOPERSafetyFilter
-from .models import Actor, ProbabilisticEnsemble, ReplayBuffer, TD3Planner
+from .models import (
+    Actor,
+    PriorValueEnsemble,
+    ProbabilisticEnsemble,
+    ReplayBuffer,
+    TD3Planner,
+)
 
 __all__ = [
     "Actor",
     "CostDefinition",
     "ProbabilisticEnsemble",
+    "PriorValueEnsemble",
     "ReplayBuffer",
     "SOOPERSafetyFilter",
     "TD3Planner",

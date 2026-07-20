@@ -21,7 +21,7 @@ from run.train_sooper import (
     controller_for,
     evaluate,
 )
-from src.sooper import ProbabilisticEnsemble, TD3Planner
+from src.sooper import PriorValueEnsemble, ProbabilisticEnsemble, TD3Planner
 from src.utils.mlflow import reproducibility_tags
 from src.utils.verified_artifacts import log_verified_artifact_batch
 
@@ -51,6 +51,14 @@ def load_components(checkpoint: Path, device: str):
     )
     model.load_state_dict(payload["world_model"])
     model.is_fitted = bool(payload["world_model_is_fitted"])
+    prior_value_model = PriorValueEnsemble(
+        observation_dim,
+        action_dim,
+        ensemble_size=config.ensemble_size,
+        device=device,
+    )
+    prior_value_model.load_state_dict(payload["prior_value_model"])
+    prior_value_model.is_fitted = bool(payload["prior_value_model_is_fitted"])
     planner = TD3Planner.create(
         observation_dim,
         env.action_space.low,
@@ -60,7 +68,14 @@ def load_components(checkpoint: Path, device: str):
     )
     planner.load_state_dict(payload["planner"])
     env.close()
-    return config, model, planner, float(payload["budget"]), int(payload["iteration"])
+    return (
+        config,
+        model,
+        prior_value_model,
+        planner,
+        float(payload["budget"]),
+        int(payload["iteration"]),
+    )
 
 
 def main() -> None:
@@ -74,13 +89,14 @@ def main() -> None:
     parser.add_argument("--run-name", required=True)
     args = parser.parse_args()
     seeds = [int(value) for value in args.seeds.split(",")]
-    config, model, planner, budget, iteration = load_components(
+    config, model, prior_value_model, planner, budget, iteration = load_components(
         args.checkpoint, args.device
     )
     configure_determinism(config.seed)
     trials = evaluate(
         planner,
         model,
+        prior_value_model,
         controller_for(config.environment),
         config,
         budget,

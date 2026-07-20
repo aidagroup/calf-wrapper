@@ -9,7 +9,7 @@ import torch
 
 from src.controllers.controller import Controller
 from .costs import CostDefinition
-from .models import ProbabilisticEnsemble
+from .models import PriorValueEnsemble, ProbabilisticEnsemble
 
 
 @dataclass
@@ -31,6 +31,7 @@ class SOOPERSafetyFilter:
         prior: Controller,
         cost: CostDefinition,
         *,
+        prior_value_model: PriorValueEnsemble | None = None,
         budget: float,
         gamma: float = 0.99,
         pessimism_beta: float = 2.0,
@@ -41,6 +42,7 @@ class SOOPERSafetyFilter:
         self.model = model
         self.prior = prior
         self.cost = cost
+        self.prior_value_model = prior_value_model
         self.budget = float(budget)
         self.gamma = float(gamma)
         self.pessimism_beta = float(pessimism_beta)
@@ -80,6 +82,23 @@ class SOOPERSafetyFilter:
             obs = obs[None]
         if actions.ndim == 1:
             actions = actions[None]
+        if self.prior_value_model is not None:
+            if not self.prior_value_model.is_fitted:
+                infinite = np.full(len(obs), np.inf, dtype=np.float32)
+                return infinite, -infinite, infinite
+            rewards, costs = self.prior_value_model.predict_members(obs, actions)
+            _, _, _, uncertainty = self.model.predict_mean(obs, actions)
+            pessimistic_cost = costs.mean(0) + self.pessimism_beta * costs.std(
+                0, unbiased=False
+            )
+            pessimistic_reward = rewards.mean(0) - self.pessimism_beta * rewards.std(
+                0, unbiased=False
+            )
+            return (
+                pessimistic_cost.cpu().numpy(),
+                pessimistic_reward.cpu().numpy(),
+                uncertainty.cpu().numpy(),
+            )
         batch_size = len(obs)
         member_costs = torch.zeros(
             self.model.ensemble_size, batch_size, device=self.model.device

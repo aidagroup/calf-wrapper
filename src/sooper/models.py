@@ -22,6 +22,16 @@ def _mlp(input_dim: int, output_dim: int, hidden: int, depth: int = 2) -> nn.Seq
     return nn.Sequential(*layers)
 
 
+def _relu_mlp(input_dim: int, output_dim: int, hidden: int) -> nn.Sequential:
+    return nn.Sequential(
+        nn.Linear(input_dim, hidden),
+        nn.ReLU(),
+        nn.Linear(hidden, hidden),
+        nn.ReLU(),
+        nn.Linear(hidden, output_dim),
+    )
+
+
 class EnsembleMember(nn.Module):
     def __init__(self, observation_dim: int, action_dim: int, hidden: int):
         super().__init__()
@@ -161,13 +171,128 @@ class ProbabilisticEnsemble(nn.Module):
         return {"model_loss": final_loss}
 
 
+class PriorValueMember(nn.Module):
+    def __init__(self, observation_dim: int, action_dim: int, hidden: int):
+        super().__init__()
+        self.network = _mlp(observation_dim + action_dim, 2, hidden)
+
+    def forward(self, observation: torch.Tensor, action: torch.Tensor):
+        values = self.network(torch.cat((observation, action), dim=-1))
+        return values[..., 0], F.softplus(values[..., 1])
+
+
+class PriorValueEnsemble(nn.Module):
+    """Fitted policy-evaluation ensemble for the conservative prior.
+
+    This corresponds to the learned backup ``Qr``/``Qc`` heads in the official
+    implementation and avoids an expensive model rollout at every real step.
+    """
+
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        *,
+        ensemble_size: int = 5,
+        hidden: int = 256,
+        reward_scale: float = 100.0,
+        cost_scale: float = 10.0,
+        device: str | torch.device = "cpu",
+    ):
+        super().__init__()
+        self.members = nn.ModuleList(
+            [
+                PriorValueMember(observation_dim, action_dim, hidden)
+                for _ in range(ensemble_size)
+            ]
+        )
+        self.reward_scale = float(reward_scale)
+        self.cost_scale = float(cost_scale)
+        self.device = torch.device(device)
+        self.to(self.device)
+        self.is_fitted = False
+
+    def predict_members(self, observations: torch.Tensor, actions: torch.Tensor):
+        rewards, costs = zip(
+            *(member(observations, actions) for member in self.members)
+        )
+        return (
+            torch.stack(rewards) * self.reward_scale,
+            torch.stack(costs) * self.cost_scale,
+        )
+
+    def fit(
+        self,
+        data: dict[str, np.ndarray],
+        prior,
+        *,
+        gamma: float,
+        epochs: int,
+        batch_size: int,
+        learning_rate: float,
+        seed: int,
+    ) -> dict[str, float]:
+        optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+        rng = np.random.default_rng(seed)
+        size = len(data["rewards"])
+        final_loss = 0.0
+        self.train()
+        for _ in range(epochs):
+            targets = copy.deepcopy(self.members).to(self.device).eval()
+            bootstraps = [rng.integers(0, size, size=size) for _ in self.members]
+            for start in range(0, size, batch_size):
+                optimizer.zero_grad(set_to_none=True)
+                losses = []
+                for member, target, indices in zip(self.members, targets, bootstraps):
+                    selected = indices[start : start + batch_size]
+                    obs = torch.as_tensor(
+                        data["observations"][selected], device=self.device
+                    )
+                    actions = torch.as_tensor(
+                        data["actions"][selected], device=self.device
+                    )
+                    next_obs = torch.as_tensor(
+                        data["next_observations"][selected], device=self.device
+                    )
+                    rewards = torch.as_tensor(
+                        data["rewards"][selected], device=self.device
+                    )
+                    costs = torch.as_tensor(data["costs"][selected], device=self.device)
+                    dones = torch.as_tensor(data["dones"][selected], device=self.device)
+                    next_actions = torch.as_tensor(
+                        prior.get_action(next_obs.detach().cpu().numpy()),
+                        dtype=torch.float32,
+                        device=self.device,
+                    )
+                    with torch.no_grad():
+                        next_reward, next_cost = target(next_obs, next_actions)
+                        target_reward = rewards + gamma * (1.0 - dones) * (
+                            next_reward * self.reward_scale
+                        )
+                        target_cost = costs + gamma * (1.0 - dones) * (
+                            next_cost * self.cost_scale
+                        )
+                    predicted_reward, predicted_cost = member(obs, actions)
+                    loss = F.smooth_l1_loss(
+                        predicted_reward, target_reward / self.reward_scale
+                    ) + F.smooth_l1_loss(predicted_cost, target_cost / self.cost_scale)
+                    losses.append(loss)
+                total = torch.stack(losses).mean()
+                total.backward()
+                optimizer.step()
+                final_loss = float(total.detach().cpu())
+        self.eval()
+        self.is_fitted = True
+        return {"prior_value_loss": final_loss}
+
+
 class Actor(nn.Module):
     def __init__(
         self, observation_dim: int, action_low: np.ndarray, action_high: np.ndarray
     ):
         super().__init__()
         action_dim = len(action_low)
-        self.network = _mlp(observation_dim, action_dim, 256)
+        self.network = _relu_mlp(observation_dim, action_dim, 256)
         self.register_buffer(
             "action_scale",
             torch.as_tensor((action_high - action_low) / 2.0, dtype=torch.float32),
@@ -186,8 +311,8 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, observation_dim: int, action_dim: int):
         super().__init__()
-        self.q1 = _mlp(observation_dim + action_dim, 1, 256)
-        self.q2 = _mlp(observation_dim + action_dim, 1, 256)
+        self.q1 = _relu_mlp(observation_dim + action_dim, 1, 256)
+        self.q2 = _relu_mlp(observation_dim + action_dim, 1, 256)
 
     def forward(self, observation: torch.Tensor, action: torch.Tensor):
         inputs = torch.cat((observation, action), dim=-1)
@@ -325,6 +450,28 @@ class TD3Planner:
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor.eval()
         return final
+
+    def initialize_from_cleanrl(self, base_actor, base_critic) -> None:
+        """Exactly copy the vendored CleanRL TD3 actor and twin critics."""
+
+        def copy_linear(target: nn.Linear, source: nn.Linear) -> None:
+            target.weight.data.copy_(source.weight.data.to(self.device))
+            target.bias.data.copy_(source.bias.data.to(self.device))
+
+        copy_linear(self.actor.network[0], base_actor.fc1)
+        copy_linear(self.actor.network[2], base_actor.fc2)
+        copy_linear(self.actor.network[4], base_actor.fc_mu)
+        self.actor.action_scale.copy_(base_actor.action_scale.to(self.device))
+        self.actor.action_bias.copy_(base_actor.action_bias.to(self.device))
+        for target_network, source_network in (
+            (self.critic.q1, base_critic.qf1),
+            (self.critic.q2, base_critic.qf2),
+        ):
+            copy_linear(target_network[0], source_network.fc1)
+            copy_linear(target_network[2], source_network.fc2)
+            copy_linear(target_network[4], source_network.fc3)
+        self.actor_target.load_state_dict(self.actor.state_dict())
+        self.critic_target.load_state_dict(self.critic.state_dict())
 
     def update(self, batch: dict[str, np.ndarray]) -> dict[str, float]:
         tensors = {

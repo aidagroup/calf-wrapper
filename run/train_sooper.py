@@ -35,6 +35,7 @@ from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalContro
 from src.controllers.underwaterdrone import UnderwaterDroneNominalController
 from src.models.cleanrl_td3 import CleanRLTD3
 from src.sooper import (
+    PriorValueEnsemble,
     ProbabilisticEnsemble,
     ReplayBuffer,
     SOOPERSafetyFilter,
@@ -70,6 +71,8 @@ class SOOPERConfig:
     model_epochs: int
     model_batch_size: int
     model_learning_rate: float
+    prior_value_epochs: int
+    prior_value_learning_rate: float
     behavior_clone_epochs: int
     actor_learning_rate: float
     replay_capacity: int
@@ -185,9 +188,9 @@ def collect_prior_data(
     )
 
 
-def fit_world_model(model, replay, config, iteration):
+def fit_world_model(model, prior_value_model, prior, replay, config, iteration):
     data = replay.arrays()
-    return model.fit(
+    metrics = model.fit(
         data["observations"],
         data["actions"],
         data["next_observations"],
@@ -198,6 +201,18 @@ def fit_world_model(model, replay, config, iteration):
         learning_rate=config.model_learning_rate,
         seed=config.seed + 10_000 + iteration,
     )
+    metrics.update(
+        prior_value_model.fit(
+            data,
+            prior,
+            gamma=config.gamma,
+            epochs=config.prior_value_epochs,
+            batch_size=config.model_batch_size,
+            learning_rate=config.prior_value_learning_rate,
+            seed=config.seed + 30_000 + iteration,
+        )
+    )
+    return metrics
 
 
 def model_rollouts(
@@ -273,6 +288,7 @@ def model_rollouts(
 def evaluate(
     planner,
     model,
+    prior_value_model,
     prior,
     config,
     budget,
@@ -283,7 +299,7 @@ def evaluate(
     definition = cost_definition(config.env_id)
     trials = []
     evaluation_seeds = seeds or [
-        config.seed + 1_000_000 + iteration * 10_000 + trial
+        config.seed + 1_000_000 + trial
         for trial in range(config.evaluation_episodes)
     ]
     for trial, seed in enumerate(evaluation_seeds):
@@ -293,6 +309,7 @@ def evaluate(
             model,
             prior,
             definition,
+            prior_value_model=prior_value_model,
             budget=budget,
             gamma=config.gamma,
             pessimism_beta=config.pessimism_beta,
@@ -305,9 +322,15 @@ def evaluate(
         interventions = 0
         reached = False
         length = 0
+        predicted_prior_costs = []
+        expected_total_costs = []
+        model_uncertainties = []
         for step in range(config.horizon):
             proposed = planner.action(observation)
             decision = filter_.decide(observation, proposed)
+            predicted_prior_costs.append(decision.predicted_prior_cost)
+            expected_total_costs.append(decision.expected_total_cost)
+            model_uncertainties.append(decision.model_uncertainty)
             next_observation, reward, terminated, truncated, info = env.step(
                 decision.action
             )
@@ -337,6 +360,9 @@ def evaluate(
                 "interventions": interventions,
                 "intervention_fraction": interventions / max(length, 1),
                 "episode_length": length,
+                "mean_predicted_prior_cost": float(np.mean(predicted_prior_costs)),
+                "max_expected_total_cost": float(np.max(expected_total_costs)),
+                "mean_model_uncertainty": float(np.mean(model_uncertainties)),
             }
         )
     return trials
@@ -345,6 +371,7 @@ def evaluate(
 def collect_online_episode(
     planner,
     model,
+    prior_value_model,
     prior,
     replay,
     config,
@@ -367,6 +394,7 @@ def collect_online_episode(
         model,
         prior,
         definition,
+        prior_value_model=prior_value_model,
         budget=budget,
         gamma=config.gamma,
         pessimism_beta=config.pessimism_beta,
@@ -377,6 +405,9 @@ def collect_online_episode(
     total_reward = total_cost = 0.0
     interventions = 0
     reached = False
+    predicted_prior_costs = []
+    expected_total_costs = []
+    model_uncertainties = []
     for step in range(config.horizon):
         proposed = planner.action(observation)
         noise = rng.normal(0.0, config.exploration_noise, size=proposed.shape)
@@ -384,6 +415,9 @@ def collect_online_episode(
             proposed + noise, env.action_space.low, env.action_space.high
         )
         decision = filter_.decide(observation, proposed)
+        predicted_prior_costs.append(decision.predicted_prior_cost)
+        expected_total_costs.append(decision.expected_total_cost)
+        model_uncertainties.append(decision.model_uncertainty)
         next_observation, reward, terminated, truncated, info = env.step(
             decision.action
         )
@@ -410,12 +444,16 @@ def collect_online_episode(
         "interventions": interventions,
         "intervention_fraction": interventions / (step + 1),
         "episode_length": step + 1,
+        "mean_predicted_prior_cost": float(np.mean(predicted_prior_costs)),
+        "max_expected_total_cost": float(np.max(expected_total_costs)),
+        "mean_model_uncertainty": float(np.mean(model_uncertainties)),
     }
 
 
 def checkpoint_payload(
     config,
     model,
+    prior_value_model,
     planner,
     real_replay,
     synthetic_replay,
@@ -431,6 +469,8 @@ def checkpoint_payload(
         "budget": budget,
         "world_model": model.state_dict(),
         "world_model_is_fitted": model.is_fitted,
+        "prior_value_model": prior_value_model.state_dict(),
+        "prior_value_model_is_fitted": prior_value_model.is_fitted,
         "planner": planner.state_dict(),
         "real_replay": real_replay.state_dict(),
         "synthetic_replay": synthetic_replay.state_dict(),
@@ -481,7 +521,7 @@ def summary_for(config, budget, prior_costs, online, evaluations, elapsed, check
         | {"from_observation": "callable", "from_transition_info": "callable"},
         "cost_budget": budget,
         "prior_calibration_costs": prior_costs,
-        "completed_iterations": final_iteration,
+        "completed_iterations": final_iteration + 1,
         "real_interactions": int(sum(row["episode_length"] for row in online)),
         "offline_prior_interactions": config.offline_prior_episodes * config.horizon,
         "wall_clock_seconds": elapsed,
@@ -519,6 +559,12 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
     model = ProbabilisticEnsemble(
         obs_dim, action_dim, ensemble_size=config.ensemble_size, device=config.device
     )
+    prior_value_model = PriorValueEnsemble(
+        obs_dim,
+        action_dim,
+        ensemble_size=config.ensemble_size,
+        device=config.device,
+    )
     planner = TD3Planner.create(
         obs_dim,
         env.action_space.low,
@@ -547,21 +593,35 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
             if config.cost_budget >= 0
             else max(prior_costs) * config.budget_margin + 1e-6
         )
-        model_metrics = fit_world_model(model, real_replay, config, 0)
-        bc_loss = planner.behavior_clone(
-            bc_observations,
-            bc_actions,
-            epochs=config.behavior_clone_epochs,
-            batch_size=config.batch_size,
-            seed=config.seed + 20_000,
+        model_metrics = fit_world_model(
+            model, prior_value_model, prior, real_replay, config, 0
         )
-        initialization = {**model_metrics, "behavior_clone_loss": bc_loss}
+        if isinstance(base, CleanRLTD3):
+            planner.initialize_from_cleanrl(base.actor, base.critic)
+            bc_loss = 0.0
+            initialization_method = "exact-cleanrl-td3-state-copy"
+        else:
+            bc_loss = planner.behavior_clone(
+                bc_observations,
+                bc_actions,
+                epochs=config.behavior_clone_epochs,
+                batch_size=config.batch_size,
+                seed=config.seed + 20_000,
+            )
+            initialization_method = "behavior-cloning"
+        initialization = {
+            **model_metrics,
+            "behavior_clone_loss": bc_loss,
+            "policy_initialization": initialization_method,
+        }
     else:
         payload = torch.load(resume, map_location=config.device, weights_only=False)
         if payload.get("format") != "calf-wrapper-sooper-v1":
             raise ValueError("Unsupported SOOPER checkpoint")
         model.load_state_dict(payload["world_model"])
         model.is_fitted = payload["world_model_is_fitted"]
+        prior_value_model.load_state_dict(payload["prior_value_model"])
+        prior_value_model.is_fitted = payload["prior_value_model_is_fitted"]
         planner.load_state_dict(payload["planner"])
         real_replay.load_state_dict(payload["real_replay"])
         synthetic_replay.load_state_dict(payload["synthetic_replay"])
@@ -598,6 +658,34 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
             }
         )
         mlflow.log_param("resolved_cost_budget", budget)
+        if resume is None:
+            initial_trials = evaluate(
+                planner,
+                model,
+                prior_value_model,
+                prior,
+                config,
+                budget,
+                iteration=-1,
+            )
+            evaluation_rows.extend(initial_trials)
+            mlflow.log_metrics(
+                {
+                    "eval_mean_reward": float(
+                        np.mean([x["episode_return"] for x in initial_trials])
+                    ),
+                    "eval_goal_reaching_rate": float(
+                        np.mean([x["goal_reached"] for x in initial_trials])
+                    ),
+                    "eval_constraint_satisfaction_rate": float(
+                        np.mean([x["constraint_satisfied"] for x in initial_trials])
+                    ),
+                    "eval_intervention_fraction": float(
+                        np.mean([x["intervention_fraction"] for x in initial_trials])
+                    ),
+                },
+                step=0,
+            )
         checkpoints = output_dir / "checkpoints"
         checkpoints.mkdir(exist_ok=True)
         final_checkpoint = None
@@ -607,6 +695,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                     collect_online_episode(
                         planner,
                         model,
+                        prior_value_model,
                         prior,
                         real_replay,
                         config,
@@ -616,7 +705,14 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                         rng=rng,
                     )
                 )
-            model_metrics = fit_world_model(model, real_replay, config, iteration + 1)
+            model_metrics = fit_world_model(
+                model,
+                prior_value_model,
+                prior,
+                real_replay,
+                config,
+                iteration + 1,
+            )
             model_env = gym.make(config.env_id)
             rollout_metrics = model_rollouts(
                 model,
@@ -625,6 +721,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                     model,
                     prior,
                     cost_definition(config.env_id),
+                    prior_value_model=prior_value_model,
                     budget=budget,
                     gamma=config.gamma,
                     pessimism_beta=config.pessimism_beta,
@@ -648,7 +745,13 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                     source.sample(min(config.batch_size, source.size))
                 )
             trials = evaluate(
-                planner, model, prior, config, budget, iteration=iteration
+                planner,
+                model,
+                prior_value_model,
+                prior,
+                config,
+                budget,
+                iteration=iteration,
             )
             evaluation_rows.extend(trials)
             metrics = {
@@ -670,7 +773,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                 "real_replay_size": float(real_replay.size),
                 "synthetic_replay_size": float(synthetic_replay.size),
             }
-            mlflow.log_metrics(metrics, step=iteration)
+            mlflow.log_metrics(metrics, step=iteration + 1)
             if (
                 (iteration + 1) % config.checkpoint_every == 0
                 or iteration + 1 == config.online_iterations
@@ -683,6 +786,7 @@ def run(config: SOOPERConfig, resume: Path | None = None) -> dict[str, Any]:
                     checkpoint_payload(
                         config,
                         model,
+                        prior_value_model,
                         planner,
                         real_replay,
                         synthetic_replay,
@@ -747,6 +851,8 @@ def parse_args() -> tuple[SOOPERConfig, Path | None]:
     parser.add_argument("--model-epochs", type=int, default=20)
     parser.add_argument("--model-batch-size", type=int, default=256)
     parser.add_argument("--model-learning-rate", type=float, default=1e-3)
+    parser.add_argument("--prior-value-epochs", type=int, default=20)
+    parser.add_argument("--prior-value-learning-rate", type=float, default=3e-4)
     parser.add_argument("--behavior-clone-epochs", type=int, default=50)
     parser.add_argument("--actor-learning-rate", type=float, default=3e-4)
     parser.add_argument("--replay-capacity", type=int, default=1_000_000)
