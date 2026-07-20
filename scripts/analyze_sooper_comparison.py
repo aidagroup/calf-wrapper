@@ -284,7 +284,18 @@ def main() -> None:
     write_macros(summary, tests, compute, protocol, args.output_dir / "sooper_numbers.tex")
     plot_learning(curve, args.output_dir / "sooper_learning_curves.pdf")
     plot_comparison(summary, args.output_dir / "sooper_reward_reliability_pareto.pdf", args.output_dir / "sooper_reliability_comparison.pdf")
-    manifest = {"format": "calf-wrapper-sooper-comparison-analysis-v1", "protocol_sha256": sha256(args.protocol), "paired_seeds_per_method": 100, "sooper_training_seeds": len(protocol["sooper"]["runs"]), "outputs": sorted(path.name for path in args.output_dir.iterdir())}
+    output_records = {
+        path.name: {"size_bytes": path.stat().st_size, "sha256": sha256(path)}
+        for path in sorted(args.output_dir.iterdir())
+        if path.is_file() and path.name != "manifest.json"
+    }
+    manifest = {
+        "format": "calf-wrapper-sooper-comparison-analysis-v1",
+        "protocol_sha256": sha256(args.protocol),
+        "paired_seeds_per_method": 100,
+        "sooper_training_seeds": len(protocol["sooper"]["runs"]),
+        "outputs": output_records,
+    }
     (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(summary.to_json(orient="records", indent=2))
 

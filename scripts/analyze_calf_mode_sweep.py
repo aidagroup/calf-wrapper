@@ -322,6 +322,11 @@ def main() -> None:
     plot_legacy(matched, args.output_dir / "calf_legacy_new_modes.pdf")
     write_table(summary, args.output_dir / "calf_mode_table.tex")
     write_macros(summary, args.output_dir / "calf_numbers.tex")
+    output_records = {
+        path.name: {"size_bytes": path.stat().st_size, "sha256": sha256(path)}
+        for path in sorted(args.output_dir.iterdir())
+        if path.is_file() and path.name != "manifest.json"
+    }
     manifest = {
         "format": "calf-wrapper-nab-analysis-v1",
         "source": str(args.results),
@@ -330,7 +335,7 @@ def main() -> None:
         "canonical_checkpoint_mode_rows": len(data),
         "summary_rows": len(summary),
         "matched_legacy_new_rows": len(matched),
-        "outputs": sorted(path.name for path in args.output_dir.iterdir()),
+        "outputs": output_records,
     }
     (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
