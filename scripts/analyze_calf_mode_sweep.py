@@ -252,6 +252,28 @@ def plot_legacy(matched: pd.DataFrame, output: Path) -> None:
     plt.close(fig)
 
 
+def write_table(summary: pd.DataFrame, output: Path) -> None:
+    lines = [
+        r"\begin{table*}[t]",
+        r"\centering\scriptsize",
+        r"\caption{Horizon-normalized CALF-Wrapper modes over the complete checkpoint sweep. Reward differences and 95\% confidence intervals are paired against the bare backbone.}",
+        r"\label{tab:nab_modes}",
+        r"\begin{tabular}{llrrrrrrr}",
+        r"\hline",
+        r"Environment & Mode & $T$ & Target NAB & $p_0$ & $\lambda$ & Empirical NAB & Fallback & $\Delta R$ (95\% CI) \\",
+        r"\hline",
+    ]
+    for _, row in summary.iterrows():
+        lines.append(
+            f"{ENV_LABEL[row['environment']]} & {MODE_LABEL[row['mode']]} & {int(row['horizon'])} & "
+            f"{row['target_nab']:.2f} & {row['p0']:.1f} & {row['lambda']:.6f} & "
+            f"{row['empirical_nab']:.3f} & {row['fallback_fraction']:.3f} & "
+            f"{row['reward_gain_mean']:.1f} $\\pm$ {row['reward_gain_ci95']:.1f} \\\\"
+        )
+    lines.extend([r"\hline", r"\end{tabular}", r"\end{table*}"])
+    output.write_text("\n".join(lines) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", type=Path, required=True)
@@ -270,6 +292,7 @@ def main() -> None:
     plot_sensitivity(summary, args.output_dir / "calf_nab_sensitivity.pdf")
     plot_tradeoff(summary, args.output_dir / "calf_reward_reliability_tradeoff.pdf")
     plot_legacy(matched, args.output_dir / "calf_legacy_new_modes.pdf")
+    write_table(summary, args.output_dir / "calf_mode_table.tex")
     manifest = {
         "format": "calf-wrapper-nab-analysis-v1",
         "source": str(args.results),
