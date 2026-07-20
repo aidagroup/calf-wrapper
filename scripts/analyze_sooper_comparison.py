@@ -27,6 +27,13 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def latex_probability(value: float) -> str:
+    if value >= 1e-3:
+        return f"{value:.3g}"
+    mantissa, exponent = f"{value:.2e}".split("e")
+    return rf"{mantissa}\times10^{{{int(exponent)}}}"
+
+
 def style() -> None:
     plt.rcParams.update({
         "font.size": 8, "axes.titlesize": 9, "axes.labelsize": 8,
@@ -254,6 +261,7 @@ def write_macros(
     tests: pd.DataFrame,
     compute: pd.DataFrame,
     protocol: dict,
+    screening: pd.DataFrame,
     output: Path,
 ) -> None:
     """Write machine-generated values used by the manuscript prose."""
@@ -271,6 +279,7 @@ def write_macros(
             rf"\newcommand{{\Sooper{macro_name}GoalRate}}{{{row.goal_reaching_rate:.3f}}}",
             rf"\newcommand{{\Sooper{macro_name}ConstraintRate}}{{{row.constraint_satisfaction_rate:.3f}}}",
             rf"\newcommand{{\Sooper{macro_name}Intervention}}{{{row.intervention_fraction:.3f}}}",
+            rf"\newcommand{{\Sooper{macro_name}EmpiricalNab}}{{{1.0 - row.intervention_fraction:.3f}}}",
         ])
     for metric, metric_name, digits in (
         ("episode_return", "Reward", 1),
@@ -287,12 +296,23 @@ def write_macros(
             lines.extend([
                 rf"\newcommand{{\Sooper{metric_name}{comparison_name}Difference}}{{{row.mean_paired_difference:.{digits}f}}}",
                 rf"\newcommand{{\Sooper{metric_name}{comparison_name}CI}}{{{row.difference_ci95_half_width:.{digits}f}}}",
-                rf"\newcommand{{\Sooper{metric_name}{comparison_name}PValue}}{{{row.holm_adjusted_p:.3g}}}",
+                rf"\newcommand{{\Sooper{metric_name}{comparison_name}PValue}}{{{latex_probability(row.holm_adjusted_p)}}}",
             ])
     lines.extend([
+        rf"\newcommand{{\SooperScreeningSettings}}{{{len(screening)}}}",
+        rf"\newcommand{{\SooperScreeningMaxGoal}}{{{screening.goal_reaching_rate.max():.3f}}}",
+        rf"\newcommand{{\SooperDevCheckpointStep}}{{{protocol['checkpoint_step']:,}}}".replace(",", "{,}"),
+        rf"\newcommand{{\SooperDevBaseReward}}{{{protocol['backbone']['development_reward']:.1f}}}",
+        rf"\newcommand{{\SooperDevBaseGoal}}{{{protocol['backbone']['development_goal_reaching_rate']:.3f}}}",
+        rf"\newcommand{{\SooperDevSooperReward}}{{{protocol['sooper']['development_reward']:.1f}}}",
+        rf"\newcommand{{\SooperDevSooperGoal}}{{{protocol['sooper']['development_goal_reaching_rate']:.3f}}}",
+        rf"\newcommand{{\SooperDevSooperConstraint}}{{{protocol['sooper']['development_constraint_satisfaction_rate']:.3f}}}",
+        rf"\newcommand{{\SooperDevCalfReward}}{{{protocol['calf']['development_reward']:.1f}}}",
+        rf"\newcommand{{\SooperDevCalfGoal}}{{{protocol['calf']['development_goal_reaching_rate']:.3f}}}",
         rf"\newcommand{{\SooperOfflineInteractions}}{{{int(sooper_compute.offline_interactions)}}}",
         rf"\newcommand{{\SooperOnlineInteractions}}{{{int(sooper_compute.online_interactions)}}}",
         rf"\newcommand{{\SooperAdaptationMinutes}}{{{sooper_compute.mean_adaptation_wall_clock_seconds / 60.0:.1f}}}",
+        rf"\newcommand{{\SooperTotalInteractions}}{{{int((sooper_compute.offline_interactions + sooper_compute.online_interactions) * len(protocol['sooper']['runs'])):,}}}".replace(",", "{,}"),
         rf"\newcommand{{\SooperCostBudget}}{{{protocol['cost_budget']:.2f}}}",
         rf"\newcommand{{\SooperHeldOutSeeds}}{{{int(summary.n_paired_held_out_seeds.min())}}}",
     ])
@@ -321,7 +341,8 @@ def main() -> None:
     curve.to_csv(args.output_dir / "sooper_learning_curve.csv", index=False)
     compute.to_csv(args.output_dir / "comparison_compute.csv", index=False)
     write_table(summary, compute, args.output_dir / "sooper_held_out_table.tex")
-    write_macros(summary, tests, compute, protocol, args.output_dir / "sooper_numbers.tex")
+    screening = pd.read_csv(args.protocol.parent / "sooper_screening_summary.csv")
+    write_macros(summary, tests, compute, protocol, screening, args.output_dir / "sooper_numbers.tex")
     plot_learning(curve, args.output_dir / "sooper_learning_curves.pdf")
     plot_comparison(summary, args.output_dir / "sooper_reward_reliability_pareto.pdf", args.output_dir / "sooper_reliability_comparison.pdf")
     output_records = {
