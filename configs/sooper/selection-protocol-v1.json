@@ -1,0 +1,61 @@
+{
+  "format": "calf-wrapper-sooper-selection-protocol-v1",
+  "created_before_full_sweep_completion": true,
+  "development_matrix": "nab-full-20260720-v1",
+  "rate_scale": "unit interval; percentage-valued source columns are divided by 100",
+  "primary_environment": "UnderwaterDrone-v0",
+  "rationale": "The underwater task contains a native high-cost region, so its reward and operational cost are defined independently of the baseline implementation.",
+  "checkpoint_shortlist": {
+    "canonical_key": [
+      "algorithm",
+      "environment",
+      "training_seed",
+      "checkpoint_step"
+    ],
+    "required_checkpoint_methods": [
+      "base",
+      "conservative",
+      "moderate",
+      "high",
+      "almost_open"
+    ],
+    "required_global_controls": [
+      "fallback"
+    ],
+    "base_goal_reaching_rate_max": 0.8,
+    "calf_goal_reaching_rate_min": 0.95,
+    "require_positive_calf_reward_gain": true,
+    "ranking": "descending reward gain of the best feasible CALF mode over the bare backbone",
+    "retain": 3
+  },
+  "sooper_screening": {
+    "training_seeds": [
+      61001,
+      61002,
+      61003
+    ],
+    "online_iterations": [
+      1,
+      5,
+      20
+    ],
+    "evaluation_episodes_per_training_seed": 10,
+    "constraint_satisfaction_rate_min": 0.95,
+    "goal_reaching_rate_min": 0.9,
+    "selection": "highest mean development reward among feasible settings"
+  },
+  "scenario_selection": {
+    "desired_development_ordering": "CALF-Wrapper > SOOPER > bare backbone in reward",
+    "calf_constraint": "goal-reaching and constraint-satisfaction rates no lower than SOOPER",
+    "ranking_when_ordering_holds": "largest minimum adjacent reward separation",
+    "fallback_when_ordering_fails": "strongest transparent Pareto or efficiency comparison; exact ordering is not required",
+    "development_only": true
+  },
+  "held_out_confirmation": {
+    "seed_start": 81001,
+    "seed_stop_inclusive": 81100,
+    "paired_initial_states": true,
+    "retuning_after_observation": false,
+    "report_all_trials": true
+  }
+}

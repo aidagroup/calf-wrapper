@@ -7,6 +7,7 @@ import torch
 import src  # noqa: F401
 from run.train_sooper import controller_for
 from scripts.run_sooper_matrix import command, shuffled_shard
+from scripts.prepare_sooper_screening import shortlist
 from src.models.cleanrl_td3 import CleanRLActor, CleanRLTwinCritic
 from src.sooper import (
     PriorValueEnsemble,
@@ -171,6 +172,46 @@ def test_matrix_shards_are_deterministic_disjoint_and_portable(tmp_path):
     assert shards == [shuffled_shard(tasks, index, 3, 91) for index in range(3)]
     launch = command(tasks[0], tmp_path / "out", "cuda:0", tmp_path)
     assert str((tmp_path / tasks[0]["model_path"]).resolve()) in launch
+
+
+def test_screening_shortlist_uses_only_complete_feasible_development_groups():
+    def row(mode, reward, goal):
+        return {
+            "mode": mode,
+            "mean_reward": str(reward),
+            "goal_reaching_rate": str(goal),
+            "task_id": f"task-{mode}",
+            "mlflow_run_id": f"run-{mode}",
+        }
+
+    complete = {
+        "base": row("base", -100.0, 50.0),
+        "conservative": row("conservative", -20.0, 100.0),
+        "moderate": row("moderate", -10.0, 90.0),
+        "high": row("high", -50.0, 100.0),
+        "almost_open": row("almost_open", -80.0, 60.0),
+    }
+    incomplete = dict(complete)
+    incomplete.pop("high")
+    protocol = {
+        "primary_environment": "UnderwaterDrone-v0",
+        "checkpoint_shortlist": {
+            "required_checkpoint_methods": list(complete),
+            "base_goal_reaching_rate_max": 0.8,
+            "calf_goal_reaching_rate_min": 0.95,
+            "retain": 1,
+        },
+    }
+    selected = shortlist(
+        {
+            ("cleanrl_td3", "UnderwaterDrone-v0", 0, 30): complete,
+            ("cleanrl_td3", "UnderwaterDrone-v0", 1, 60): incomplete,
+        },
+        protocol,
+    )
+    assert len(selected) == 1
+    assert selected[0]["selected_calf_mode"] == "conservative"
+    assert selected[0]["calf_reward_gain"] == pytest.approx(80.0)
 
 
 @pytest.mark.parametrize(
