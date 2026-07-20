@@ -57,6 +57,22 @@ def test_trial_successes_preserves_terminal_success_after_vector_env_reset():
     )
 
 
+def test_trial_successes_uses_terminal_observation_instead_of_reset_state():
+    reset_observation = np.array([[-1.0, 0.0, 0.0]])
+    terminal_observation = np.array([1.0, 0.0, 0.0])
+    data = [
+        {
+            "obs": reset_observation.copy(),
+            "next_obs": reset_observation.copy(),
+            "active": np.array([True]),
+            "is_done": np.array([True]),
+            "info": [{"terminal_observation": terminal_observation}],
+        }
+    ]
+
+    np.testing.assert_array_equal(trial_successes("Pendulum-v1", data), [True])
+
+
 def test_cleanrl_td3_checkpoint_is_loadable_for_evaluation(tmp_path):
     actor = CleanRLActor(observation_dim=3, action_dim=1)
     actor.action_scale.fill_(2.0)

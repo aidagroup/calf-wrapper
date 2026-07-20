@@ -320,7 +320,12 @@ def trial_successes(env_id: str, data: list[dict[str, Any]]) -> np.ndarray:
     latest_obs = np.copy(data[0]["obs"])
     for item in data:
         active = item.get("active", np.ones(len(latest_obs), dtype=bool))
-        next_obs = item.get("next_obs", item["obs"])
+        next_obs = np.copy(item.get("next_obs", item["obs"]))
+        for trial, (done, info) in enumerate(
+            zip(item.get("is_done", []), item["info"])
+        ):
+            if done and "terminal_observation" in info:
+                next_obs[trial] = info["terminal_observation"]
         latest_obs[active] = next_obs[active]
     successes = goal_reaching_mask(env_id, latest_obs)
     info_key = {
