@@ -170,6 +170,8 @@ def main() -> None:
         "environment": "underwater-drone",
         "env_id": "UnderwaterDrone-v0",
         "algorithm": "cleanrl_td3",
+        "horizon": 1500,
+        "gamma": 0.99,
         "base_checkpoint": (
             f"run/artifacts/td3_UnderwaterDrone-v0_{int(chosen.checkpoint_training_seed)}/checkpoints/"
             f"td3_checkpoint_{int(chosen.checkpoint_step)}_steps.pt"
@@ -182,6 +184,7 @@ def main() -> None:
             "target_nab": float(calf_row.calf_target_acceptance_budget),
             "p0": float(calf_row.calf_relaxprob_init),
             "lambda": float(calf_row.calf_relaxprob_factor),
+            "change_rate": 0.01,
             "development_reward": float(chosen.calf_reward),
             "development_goal_reaching_rate": float(chosen.calf_goal_reaching_rate),
             "development_mlflow_run_id": calf_row.mlflow_run_id,
