@@ -283,6 +283,25 @@ def write_table(summary: pd.DataFrame, output: Path) -> None:
     output.write_text("\n".join(lines) + "\n")
 
 
+def write_macros(summary: pd.DataFrame, output: Path) -> None:
+    env_names = {
+        "Pendulum-v1": "Pendulum",
+        "CartpoleSwingupEnvLong-v0": "Cartpole",
+        "UnderwaterDrone-v0": "Underwater",
+        "RobotNavigationConstSpeedCatch-v0": "Robot",
+    }
+    mode_names = {mode: MODE_LABEL[mode].replace(" ", "") for mode in MODE_ORDER}
+    lines = ["% Generated from the verified complete checkpoint sweep."]
+    for _, row in summary.iterrows():
+        stem = f"Nab{env_names[row['environment']]}{mode_names[row['mode']]}"
+        lines.extend([
+            f"\\newcommand{{\\{stem}Gain}}{{{row['reward_gain_mean']:.1f}}}",
+            f"\\newcommand{{\\{stem}GainCI}}{{{row['reward_gain_ci95']:.2f}}}",
+            f"\\newcommand{{\\{stem}Goal}}{{{row['goal_reaching_rate']:.3f}}}",
+        ])
+    output.write_text("\n".join(lines) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", type=Path, required=True)
@@ -302,6 +321,7 @@ def main() -> None:
     plot_tradeoff(summary, args.output_dir / "calf_reward_reliability_tradeoff.pdf")
     plot_legacy(matched, args.output_dir / "calf_legacy_new_modes.pdf")
     write_table(summary, args.output_dir / "calf_mode_table.tex")
+    write_macros(summary, args.output_dir / "calf_numbers.tex")
     manifest = {
         "format": "calf-wrapper-nab-analysis-v1",
         "source": str(args.results),
