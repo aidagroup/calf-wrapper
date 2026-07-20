@@ -8,6 +8,7 @@ import src  # noqa: F401
 from run.train_sooper import controller_for
 from scripts.run_sooper_matrix import command, shuffled_shard
 from scripts.prepare_sooper_screening import shortlist
+from scripts.launch_sooper_workers import parse_assignment
 from src.models.cleanrl_td3 import CleanRLActor, CleanRLTwinCritic
 from src.sooper import (
     PriorValueEnsemble,
@@ -212,6 +213,10 @@ def test_screening_shortlist_uses_only_complete_feasible_development_groups():
     assert len(selected) == 1
     assert selected[0]["selected_calf_mode"] == "conservative"
     assert selected[0]["calf_reward_gain"] == pytest.approx(80.0)
+
+
+def test_worker_assignment_preserves_cuda_device_colon():
+    assert parse_assignment("2=cuda:1") == (2, "cuda:1")
 
 
 @pytest.mark.parametrize(

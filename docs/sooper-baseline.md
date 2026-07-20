@@ -64,6 +64,9 @@ uv run python scripts/run_sooper_matrix.py \
 Matrix checkpoint paths may be relative to `--model-root`; local and gor
 workers can therefore consume the same committed matrix while resolving
 checkpoints from their respective artifact mirrors.
+For persistent multi-GPU execution, `scripts/launch_sooper_workers.py` records
+the exact commit, matrix hash, deterministic global shard indices, devices,
+commands, tmux sessions, and log paths in a launch manifest.
 
 Interrupted tasks resume from their newest local checkpoint.  Each checkpoint
 contains world-model, actor/critics, optimizers, real and model replay buffers,
