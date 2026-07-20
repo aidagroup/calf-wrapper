@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import wilcoxon
 
 
 LABELS = {"base": "Bare TD3", "fallback": "Fallback", "calf": "CALF-Wrapper", "sooper": "SOOPER"}
@@ -78,6 +79,34 @@ def summarize(frame: pd.DataFrame) -> pd.DataFrame:
             "intervention_ci95_half_width": 1.984 * group.intervention_fraction.std(ddof=1) / np.sqrt(len(group)),
         })
     return pd.DataFrame(rows).set_index("method").loc[["base", "sooper", "calf", "fallback"]].reset_index()
+
+
+def paired_tests(frame: pd.DataFrame) -> pd.DataFrame:
+    pairs = [("calf", "sooper"), ("sooper", "base"), ("calf", "base")]
+    rows = []
+    for metric in ("episode_return", "goal_reached"):
+        pivot = frame.pivot(index="evaluation_seed", columns="method", values=metric)
+        for left, right in pairs:
+            difference = (pivot[left] - pivot[right]).to_numpy(float)
+            p_value = 1.0 if not np.any(difference) else float(wilcoxon(difference, alternative="greater").pvalue)
+            rows.append({
+                "metric": metric,
+                "alternative": f"{left}>{right}",
+                "n_paired_seeds": len(difference),
+                "mean_paired_difference": difference.mean(),
+                "std_paired_difference": difference.std(ddof=1),
+                "difference_ci95_half_width": 1.984 * difference.std(ddof=1) / np.sqrt(len(difference)),
+                "wilcoxon_one_sided_p": p_value,
+            })
+    result = pd.DataFrame(rows)
+    order = np.argsort(result.wilcoxon_one_sided_p.to_numpy())
+    adjusted = np.empty(len(result))
+    running = 0.0
+    for rank, index in enumerate(order):
+        running = max(running, (len(result) - rank) * result.wilcoxon_one_sided_p.iloc[index])
+        adjusted[index] = min(running, 1.0)
+    result["holm_adjusted_p"] = adjusted
+    return result
 
 
 def learning_curve(protocol: dict, screening_root: Path) -> pd.DataFrame:
@@ -170,11 +199,13 @@ def main() -> None:
     protocol = json.loads(args.protocol.read_text())
     held_out, raw_sooper = load_held_out(args.held_out_root)
     summary = summarize(held_out)
+    tests = paired_tests(held_out)
     curve = learning_curve(protocol, args.screening_root)
     compute = compute_table(protocol, args.screening_root)
     held_out.to_csv(args.output_dir / "held_out_paired_trials.csv", index=False)
     raw_sooper.to_csv(args.output_dir / "held_out_sooper_all_training_seeds.csv", index=False)
     summary.to_csv(args.output_dir / "held_out_method_summary.csv", index=False)
+    tests.to_csv(args.output_dir / "held_out_paired_tests.csv", index=False)
     curve.to_csv(args.output_dir / "sooper_learning_curve.csv", index=False)
     compute.to_csv(args.output_dir / "comparison_compute.csv", index=False)
     plot_learning(curve, args.output_dir / "sooper_learning_curves.pdf")

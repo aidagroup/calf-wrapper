@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import wilcoxon
 
 
 MODE_ORDER = ["conservative", "moderate", "high", "almost_open"]
@@ -71,6 +72,23 @@ def ci95(values: pd.Series) -> float:
     return float(1.96 * values.std(ddof=1) / np.sqrt(len(values))) if len(values) > 1 else 0.0
 
 
+def one_sided_wilcoxon(values: pd.Series) -> float:
+    array = values.dropna().to_numpy(dtype=float)
+    if not np.any(array):
+        return 1.0
+    return float(wilcoxon(array, alternative="greater").pvalue)
+
+
+def holm_adjust(values: pd.Series) -> pd.Series:
+    order = np.argsort(values.to_numpy(float))
+    adjusted = np.empty(len(values), dtype=float)
+    running = 0.0
+    for rank, index in enumerate(order):
+        running = max(running, (len(values) - rank) * float(values.iloc[index]))
+        adjusted[index] = min(running, 1.0)
+    return pd.Series(adjusted, index=values.index)
+
+
 def summarize(data: pd.DataFrame) -> pd.DataFrame:
     selected = data[data["mode"].isin(MODE_ORDER)].copy()
     rows = []
@@ -94,9 +112,12 @@ def summarize(data: pd.DataFrame) -> pd.DataFrame:
                 "goal_rate_gain": (group["goal_reaching_rate"] - group["base_goal_reaching_rate"]).mean(),
                 "reward_win_fraction": (group["reward_gain_over_base"] > 0).mean(),
                 "goal_noninferiority_fraction": (group["goal_reaching_rate"] >= group["base_goal_reaching_rate"]).mean(),
+                "reward_gain_wilcoxon_p": one_sided_wilcoxon(group["reward_gain_over_base"]),
             }
         )
-    return pd.DataFrame(rows).sort_values(
+    summary = pd.DataFrame(rows)
+    summary["reward_gain_wilcoxon_holm_p"] = holm_adjust(summary["reward_gain_wilcoxon_p"])
+    return summary.sort_values(
         ["environment", "mode"], key=lambda col: col.map({mode: i for i, mode in enumerate(MODE_ORDER)}).fillna(col)
     )
 
