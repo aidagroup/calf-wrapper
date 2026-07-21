@@ -96,6 +96,12 @@ def test_shuffled_task_shards_are_deterministic_disjoint_and_complete(tmp_path):
         task.task_id for task in tasks
     }
     assert sum(len(shard) for shard in shards) == len(tasks)
+    owners = {}
+    for worker, shard in enumerate(shards):
+        for task in shard:
+            key = (task.environment, task.training_seed, task.checkpoint_step)
+            owners.setdefault(key, set()).add(worker)
+    assert all(len(workers) == 1 for workers in owners.values())
 
 
 def test_aggregate_ignores_stale_failure_when_result_exists(tmp_path):

@@ -256,11 +256,22 @@ def evaluation_command(
 def shuffled_task_shard(
     tasks: list[Task], worker_index: int, worker_count: int, shuffle_seed: int
 ) -> list[Task]:
-    """Return one deterministic shard from a globally shuffled task order."""
+    """Return a deterministic shard of randomly ordered checkpoint bundles.
 
-    shuffled = list(tasks)
+    Keeping every mode/hyperparameter candidate for a checkpoint on one worker
+    prevents GPU-generation differences from contaminating paired comparisons.
+    The bundles themselves are shuffled, so each worker still receives a mix of
+    environments and checkpoint stages.
+    """
+
+    bundles: dict[tuple[str, int | None, int | None], list[Task]] = {}
+    for task in tasks:
+        key = (task.environment, task.training_seed, task.checkpoint_step)
+        bundles.setdefault(key, []).append(task)
+    shuffled = list(bundles.values())
     random.Random(shuffle_seed).shuffle(shuffled)
-    return shuffled[worker_index::worker_count]
+    assigned = shuffled[worker_index::worker_count]
+    return [task for bundle in assigned for task in bundle]
 
 
 def run_worker(args: argparse.Namespace) -> int:
