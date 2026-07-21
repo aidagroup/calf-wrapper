@@ -19,7 +19,9 @@
     "trials": 30,
     "mode": "conservative",
     "checkpoint_subset": "Reward-stratified low, mid, and high representatives selected independently from the completed legacy checkpoint sweep.",
-    "selection_rule": "Among candidate (rule, n) pairs meeting the pre-specified goal-reaching constraint, maximize the environment-balanced mean paired reward improvement; break a practically tied plateau toward its central n and the more conservative rule. Freeze both rule and n before the full rerun."
+    "goal_constraint": "For every environment, the checkpoint-averaged goal-reaching rate must be no more than 2 percentage points below a fallback-only evaluation on the same 30 initial states.",
+    "goal_noninferiority_margin_percentage_points": 2.0,
+    "selection_rule": "Among candidate (rule, n) pairs meeting fallback-relative goal-reaching noninferiority, maximize the environment-balanced mean paired reward score; candidates within 0.01 of the best score form a practical plateau, broken toward its logarithmically central n and then the more conservative rule. Freeze both rule and n before the full rerun."
   },
   "deterministic_gate_ablation": {
     "modes": ["conservative", "guarded", "moderate"],

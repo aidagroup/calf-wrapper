@@ -28,13 +28,14 @@ def synthetic_results():
 
 
 def test_candidate_scores_balance_environments_and_selection_enforces_goal_rate():
-    scores = candidate_scores(synthetic_results())
+    scores = candidate_scores(synthetic_results(), {"a": 100.0, "b": 100.0})
     selected, basis = select_candidate(
         scores,
-        minimum_goal_rate=95.0,
+        minimum_goal_rate=None,
+        goal_noninferiority_margin=2.0,
         practical_tie=0.01,
     )
 
     assert selected["nu_calibration_rule"] == "trajectory_scale"
     assert selected["nu_calibration_n"] == 2.0
-    assert ">= 95" in basis
+    assert "versus fallback" in basis

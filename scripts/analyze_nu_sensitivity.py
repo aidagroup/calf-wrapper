@@ -11,7 +11,10 @@ import numpy as np
 import pandas as pd
 
 
-def candidate_scores(results: pd.DataFrame) -> pd.DataFrame:
+def candidate_scores(
+    results: pd.DataFrame,
+    fallback_goal_rates: dict[str, float] | None = None,
+) -> pd.DataFrame:
     keys = ["environment", "training_seed", "checkpoint_step"]
     candidates = ["nu_calibration_rule", "nu_calibration_n"]
     expected = results[candidates].drop_duplicates().shape[0]
@@ -43,23 +46,54 @@ def candidate_scores(results: pd.DataFrame) -> pd.DataFrame:
         )
         .sort_values(candidates)
     )
+    if fallback_goal_rates is not None:
+        margins = by_environment.copy()
+        margins["goal_margin_vs_fallback"] = margins.apply(
+            lambda row: row["environment_goal_rate"]
+            - fallback_goal_rates[row["environment"]],
+            axis=1,
+        )
+        minimum_margins = margins.groupby(candidates)["goal_margin_vs_fallback"].min()
+        scores = scores.merge(
+            minimum_margins.rename("minimum_goal_margin_vs_fallback"),
+            on=candidates,
+        )
     return scores
 
 
 def select_candidate(
     scores: pd.DataFrame,
     *,
-    minimum_goal_rate: float,
+    minimum_goal_rate: float | None,
+    goal_noninferiority_margin: float,
     practical_tie: float,
 ) -> tuple[pd.Series, str]:
-    feasible = scores[scores["minimum_environment_goal_rate"] >= minimum_goal_rate]
-    if len(feasible):
-        pool = feasible
+    if "minimum_goal_margin_vs_fallback" in scores:
+        feasible = scores[
+            scores["minimum_goal_margin_vs_fallback"] >= -goal_noninferiority_margin
+        ]
+        basis = (
+            "minimum per-environment goal margin versus fallback >= "
+            f"-{goal_noninferiority_margin:g} percentage points"
+        )
+    elif minimum_goal_rate is not None:
+        feasible = scores[scores["minimum_environment_goal_rate"] >= minimum_goal_rate]
         basis = f"minimum environment goal rate >= {minimum_goal_rate:g}%"
     else:
-        best_goal = scores["minimum_environment_goal_rate"].max()
-        pool = scores[scores["minimum_environment_goal_rate"] == best_goal]
-        basis = "no candidate met the goal-rate constraint; maximized minimum goal rate"
+        raise ValueError(
+            "selection requires a fallback reference or absolute goal rate"
+        )
+    if len(feasible):
+        pool = feasible
+    else:
+        column = (
+            "minimum_goal_margin_vs_fallback"
+            if "minimum_goal_margin_vs_fallback" in scores
+            else "minimum_environment_goal_rate"
+        )
+        best_goal = scores[column].max()
+        pool = scores[scores[column] == best_goal]
+        basis = "no candidate met the goal constraint; maximized its minimum margin"
 
     best_reward = pool["reward_score"].max()
     plateau = pool[pool["reward_score"] >= best_reward - practical_tie].copy()
@@ -84,7 +118,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--minimum-goal-rate", type=float, default=95.0)
+    parser.add_argument("--fallback-results-dir", type=Path)
+    parser.add_argument("--minimum-goal-rate", type=float)
+    parser.add_argument("--goal-noninferiority-margin", type=float, default=2.0)
     parser.add_argument("--practical-tie", type=float, default=0.01)
     return parser.parse_args()
 
@@ -92,10 +128,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     results = pd.read_csv(args.results)
-    scores = candidate_scores(results)
+    fallback_goal_rates = None
+    if args.fallback_results_dir is not None:
+        fallback_goal_rates = {}
+        for path in args.fallback_results_dir.glob("*.json"):
+            payload = json.loads(path.read_text())
+            fallback_goal_rates[payload["environment"]] = payload["metrics"][
+                "goal_reaching_rate"
+            ]
+        missing = set(results["environment"]) - set(fallback_goal_rates)
+        if missing:
+            raise ValueError(f"missing fallback references for {sorted(missing)}")
+    scores = candidate_scores(results, fallback_goal_rates)
     selected, basis = select_candidate(
         scores,
         minimum_goal_rate=args.minimum_goal_rate,
+        goal_noninferiority_margin=args.goal_noninferiority_margin,
         practical_tie=args.practical_tie,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -110,6 +158,8 @@ def main() -> int:
         "mean_environment_goal_rate": float(selected["mean_environment_goal_rate"]),
         "feasibility_basis": basis,
         "minimum_goal_rate": args.minimum_goal_rate,
+        "goal_noninferiority_margin": args.goal_noninferiority_margin,
+        "fallback_goal_rates": fallback_goal_rates,
         "practical_tie": args.practical_tie,
         "selection_status": "frozen",
     }
