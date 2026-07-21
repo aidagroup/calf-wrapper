@@ -24,6 +24,10 @@
   "deterministic_gate_ablation": {
     "modes": ["conservative", "guarded", "moderate"],
     "thresholds": ["calibrated", "infinity"],
-    "scope": "One checkpoint and environment fixed from development data before inspecting ablation outcomes."
+    "scope": "One checkpoint and environment fixed before inspecting ablation outcomes.",
+    "environment": "underwater-drone",
+    "training_seed": 1,
+    "checkpoint_step": 2970000,
+    "rationale": "The late underwater-drone checkpoint is the closest match to the motivating goal-reaching deployment task and is fixed independently of the ablation outcome."
   }
 }

@@ -149,6 +149,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selection-csv", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--candidate-n",
+        help="Optional comma-separated override used after development selection",
+    )
     return parser.parse_args()
 
 
@@ -159,7 +163,11 @@ def main() -> int:
     calibration = nu_protocol["calibration"]
     fallback_seed = int(calibration["fallback_seed"])
     fallback_trials = int(calibration["fallback_trials"])
-    candidates = [float(item) for item in calibration["candidate_n"]]
+    candidates = (
+        [float(item) for item in args.candidate_n.split(",")]
+        if args.candidate_n
+        else [float(item) for item in calibration["candidate_n"]]
+    )
     checkpoints = selected_checkpoints(
         checkpoint_protocol,
         args.artifacts_root,
