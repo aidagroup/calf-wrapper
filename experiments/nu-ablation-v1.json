@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "protocol_id": "calf-wrapper-nu-ablation-v1",
+  "calibration": {
+    "rule": "nu(n) = max(goal_local_variation, fallback_value_range / (n * episode_horizon))",
+    "candidate_rules": {
+      "goal_guarded_max": "max(goal_local_variation, fallback_value_range / (n * episode_horizon))",
+      "trajectory_scale": "fallback_value_range / (n * episode_horizon); included as a control because terminal goal-entry dynamics can make goal_local_variation a structural discontinuity rather than critic noise"
+    },
+    "goal_local_variation": "Maximum absolute one-step critic change on the first transition into the goal set in each fallback trial.",
+    "fallback_value_range": "Maximum critic value minus minimum critic value over both endpoints of first-hitting fallback trajectories, truncated immediately after their first transition into the goal set.",
+    "quantiles_used": false,
+    "fallback_seed": 20260721,
+    "fallback_trials": 30,
+    "candidate_n": [1, 2, 5, 10, 20, 50]
+  },
+  "development_evaluation": {
+    "evaluation_seed": 20260722,
+    "trials": 30,
+    "mode": "conservative",
+    "checkpoint_subset": "Reward-stratified low, mid, and high representatives selected independently from the completed legacy checkpoint sweep.",
+    "selection_rule": "Among candidate (rule, n) pairs meeting the pre-specified goal-reaching constraint, maximize the environment-balanced mean paired reward improvement; break a practically tied plateau toward its central n and the more conservative rule. Freeze both rule and n before the full rerun."
+  },
+  "deterministic_gate_ablation": {
+    "modes": ["conservative", "guarded", "moderate"],
+    "thresholds": ["calibrated", "infinity"],
+    "scope": "One checkpoint and environment fixed from development data before inspecting ablation outcomes."
+  }
+}

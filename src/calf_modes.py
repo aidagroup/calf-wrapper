@@ -11,15 +11,19 @@ import numpy as np
 CalfMode = Literal[
     "custom",
     "conservative",
+    "guarded",
     "moderate",
+    "balanced",
     "high",
     "almost_open",
 ]
 
 
 TARGET_ACCEPTANCE_BUDGETS: dict[str, float] = {
-    "conservative": 0.10,
+    "conservative": 0.00,
+    "guarded": 0.10,
     "moderate": 0.35,
+    "balanced": 0.50,
     "high": 0.70,
     "almost_open": 0.95,
 }
@@ -112,6 +116,14 @@ def resolve_calf_mode(mode: CalfMode, horizon: int) -> ResolvedCalfMode:
     if mode == "custom":
         raise ValueError("custom mode must be supplied as explicit raw parameters")
     target = TARGET_ACCEPTANCE_BUDGETS[mode]
+    if target == 0.0:
+        return ResolvedCalfMode(
+            mode=mode,
+            horizon=horizon,
+            target_acceptance_budget=0.0,
+            relaxprob_init=0.0,
+            relaxprob_factor=0.0,
+        )
     relaxprob_init = 1.0
     return ResolvedCalfMode(
         mode=mode,

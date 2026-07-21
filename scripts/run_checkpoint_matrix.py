@@ -28,7 +28,14 @@ from src.utils.verified_artifacts import log_verified_artifact_batch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PROTOCOL = REPO_ROOT / "experiments" / "checkpoint-sweep-v1.json"
 DEFAULT_ARTIFACTS = REPO_ROOT / "run" / "artifacts"
-CALF_MODES = ("conservative", "moderate", "high", "almost_open")
+CALF_MODES = (
+    "conservative",
+    "guarded",
+    "moderate",
+    "balanced",
+    "high",
+    "almost_open",
+)
 DEFAULT_TASK_SHUFFLE_SEED = 20260720
 
 
@@ -48,6 +55,9 @@ class Task:
     calf_mode: str
     evaluation_seed: int
     n_envs: int
+    calf_change_rate: float | None = None
+    nu_calibration_n: float | None = None
+    nu_calibration_rule: str | None = None
 
 
 def checkpoint_step(path: Path) -> int:
@@ -174,6 +184,17 @@ def read_tasks(path: Path) -> list[Task]:
                         ),
                         "evaluation_seed": int(row["evaluation_seed"]),
                         "n_envs": int(row["n_envs"]),
+                        "calf_change_rate": (
+                            float(row["calf_change_rate"])
+                            if row.get("calf_change_rate")
+                            else None
+                        ),
+                        "nu_calibration_n": (
+                            float(row["nu_calibration_n"])
+                            if row.get("nu_calibration_n")
+                            else None
+                        ),
+                        "nu_calibration_rule": row.get("nu_calibration_rule") or None,
                     }
                 )
             )
@@ -223,6 +244,12 @@ def evaluation_command(
         command.extend(["--checkpoint-step", str(task.checkpoint_step)])
     if task.calf_mode != "custom":
         command.extend(["--calf.mode", task.calf_mode])
+    if task.calf_change_rate is not None:
+        command.extend(["--calf.calf-change-rate", str(task.calf_change_rate)])
+    if task.nu_calibration_n is not None:
+        command.extend(["--nu-calibration-n", str(task.nu_calibration_n)])
+    if task.nu_calibration_rule is not None:
+        command.extend(["--nu-calibration-rule", task.nu_calibration_rule])
     return command
 
 
@@ -316,6 +343,8 @@ def flatten_result(result: dict[str, Any]) -> dict[str, Any]:
             "algorithm",
             "training_seed",
             "checkpoint_step",
+            "nu_calibration_n",
+            "nu_calibration_rule",
             "eval_mode",
             "checkpoint_stage",
             "evaluation_seed",
@@ -528,14 +557,13 @@ def parse_args() -> argparse.Namespace:
     launch.add_argument("--matrix-id")
     launch.add_argument("--environment", default="all")
     launch.add_argument(
-        "--modes", default="fallback,base,conservative,moderate,high,almost_open"
+        "--modes",
+        default="fallback,base,conservative,guarded,moderate,balanced,high,almost_open",
     )
     launch.add_argument("--gpus", default="0,1")
     launch.add_argument("--workers-per-gpu", type=int, default=1)
     launch.add_argument("--retries", type=int, default=2)
-    launch.add_argument(
-        "--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED
-    )
+    launch.add_argument("--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED)
     launch.add_argument("--smoke", action="store_true")
     launch.add_argument("--dry-run", action="store_true")
     launch.add_argument("--allow-unpushed", action="store_true")
@@ -545,9 +573,7 @@ def parse_args() -> argparse.Namespace:
     worker.add_argument("--device", required=True)
     worker.add_argument("--worker-index", type=int, required=True)
     worker.add_argument("--worker-count", type=int, required=True)
-    worker.add_argument(
-        "--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED
-    )
+    worker.add_argument("--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED)
     worker.add_argument("--retries", type=int, default=2)
 
     monitor = subparsers.add_parser("monitor")
@@ -555,6 +581,16 @@ def parse_args() -> argparse.Namespace:
     monitor.add_argument("--protocol", type=Path, required=True)
     monitor.add_argument("--matrix-id", required=True)
     monitor.add_argument("--poll-interval", type=float, default=60.0)
+
+    prepared = subparsers.add_parser("launch-prepared")
+    parse_common(prepared)
+    prepared.add_argument("--protocol", type=Path, required=True)
+    prepared.add_argument("--matrix-id", required=True)
+    prepared.add_argument("--gpus", default="0,1")
+    prepared.add_argument("--workers-per-gpu", type=int, default=1)
+    prepared.add_argument("--retries", type=int, default=2)
+    prepared.add_argument("--shuffle-seed", type=int, default=DEFAULT_TASK_SHUFFLE_SEED)
+    prepared.add_argument("--allow-unpushed", action="store_true")
     return parser.parse_args()
 
 
@@ -564,6 +600,26 @@ def main() -> int:
         return run_worker(args)
     if args.command == "monitor":
         return run_monitor(args)
+    if args.command == "launch-prepared":
+        tasks = read_tasks(args.tasks)
+        environments = sorted({task.environment for task in tasks})
+        if not args.allow_unpushed:
+            require_pushed_clean_commit()
+        ensure_experiments(args.tracking_uri, args.experiment_prefix, environments)
+        gpus = [int(item.strip()) for item in args.gpus.split(",") if item.strip()]
+        start_tmux(
+            tasks_path=args.tasks,
+            matrix_dir=args.matrix_dir,
+            protocol=args.protocol,
+            matrix_id=args.matrix_id,
+            tracking_uri=args.tracking_uri,
+            experiment_prefix=args.experiment_prefix,
+            gpus=gpus,
+            workers_per_gpu=args.workers_per_gpu,
+            retries=args.retries,
+            shuffle_seed=args.shuffle_seed,
+        )
+        return 0
 
     protocol = json.loads(args.protocol.read_text())
     environments = (

@@ -1,9 +1,10 @@
 from gymnasium import Wrapper
 import numpy as np
-import torch
 from stable_baselines3.common.vec_env import VecEnv
 from src.controllers.controller import Controller
 from typing import Any, Optional, Union
+
+from src.critic_values import critic_values
 
 
 class CALFWrapper(Wrapper):
@@ -27,33 +28,10 @@ class CALFWrapper(Wrapper):
         self.np_rng = np.random.default_rng(seed=seed)
 
     def value(self, obs: np.ndarray) -> Union[float, np.ndarray]:
-        with torch.no_grad():
-            is_single = obs.ndim == 1
-            batch = obs.reshape(1, -1) if is_single else obs
-            tensor_obs = torch.as_tensor(
-                batch, dtype=torch.float32, device=self.model.device
-            )
-
-            policy = getattr(self.model, "policy", None)
-            if policy is not None and hasattr(policy, "predict_values"):
-                values = policy.predict_values(tensor_obs)
-            elif hasattr(self.model, "actor") and hasattr(self.model, "critic"):
-                actions = self.model.actor(tensor_obs)
-                critic_values = self.model.critic(tensor_obs, actions)
-                values = torch.min(
-                    torch.cat(critic_values, dim=1), dim=1, keepdim=True
-                )[0]
-            else:
-                raise TypeError(
-                    "CALFWrapper requires either a state-value policy or an "
-                    "actor with twin action-value critics"
-                )
-
-            values = values.cpu().numpy()
-
-            if is_single:
-                return values[0][0]
-            return values
+        values = critic_values(self.model, obs)
+        if np.ndim(values) == 0:
+            return np.asarray(values).reshape(-1)[0]
+        return np.asarray(values).reshape(-1, 1)
 
     def step(self, base_action: np.ndarray):
         value = self.value(self.obs)

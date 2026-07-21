@@ -18,6 +18,41 @@ def test_goal_reaching_mask_is_per_trial():
     np.testing.assert_array_equal(
         goal_reaching_mask("Pendulum-v1", observations), [True, False]
     )
+    assert goal_reaching_mask("Pendulum-v1", observations).dtype == np.bool_
+
+
+def test_run_episode_snapshots_observations_from_mutating_vec_env():
+    class MutatingVecEnv:
+        num_envs = 1
+
+        def __init__(self):
+            self.buffer = np.zeros((1, 1), dtype=np.float32)
+
+        def reset(self):
+            self.buffer[:] = 0
+            return self.buffer
+
+        def step(self, action):
+            self.buffer += 1
+            return (
+                self.buffer,
+                np.array([1.0]),
+                np.array([False]),
+                [{}],
+            )
+
+        def close(self):
+            pass
+
+    data = run_episode(
+        lambda obs: np.zeros((len(obs), 1), dtype=np.float32),
+        MutatingVecEnv(),
+        n_steps=3,
+    )
+
+    np.testing.assert_array_equal(data[0]["obs"], [[0.0]])
+    np.testing.assert_array_equal(data[0]["next_obs"], [[1.0]])
+    np.testing.assert_array_equal(data[1]["obs"], [[1.0]])
 
 
 def test_goal_reaching_mask_supports_added_environments():

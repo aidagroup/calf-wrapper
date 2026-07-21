@@ -328,6 +328,40 @@ artifact batch and the final matrix batch are downloaded again and verified by
 size and SHA-256. Re-running the same matrix directory resumes from existing
 task summaries.
 
+### Calibrated improvement-threshold ablation
+
+The frozen development protocol for the critic-improvement threshold is stored
+in [`experiments/nu-ablation-v1.json`](experiments/nu-ablation-v1.json). It
+calibrates each checkpoint on separate, first-hitting fallback trajectories,
+then evaluates both the goal-guarded maximum rule and its trajectory-scale
+control over the preregistered values of `n`. The checkpoint subset is selected
+from the already completed legacy sweep, before these evaluations are run.
+
+```sh
+uv run python scripts/calibrate_nu.py \
+  --selection-csv /path/to/calf_reward_representative_selection.csv \
+  --output-dir run/artifacts/nu-ablation/nu-dev-v1 \
+  --device cuda:1
+
+uv run python scripts/prepare_nu_tasks.py sensitivity \
+  --calibration-csv run/artifacts/nu-ablation/nu-dev-v1/nu_calibration.csv \
+  --output run/artifacts/nu-ablation/nu-sensitivity-v1/tasks.csv \
+  --matrix-id nu-sensitivity-v1
+
+uv run python scripts/run_checkpoint_matrix.py launch-prepared \
+  --tasks run/artifacts/nu-ablation/nu-sensitivity-v1/tasks.csv \
+  --matrix-dir run/artifacts/nu-ablation/nu-sensitivity-v1 \
+  --protocol experiments/nu-ablation-v1.json \
+  --matrix-id nu-sensitivity-v1 \
+  --tracking-uri http://192.168.1.5:5001 \
+  --experiment-prefix calf-wrapper/nu-sensitivity-v1 \
+  --gpus 0,1
+```
+
+Every task records the numeric threshold, rule variant, and `n`. The same
+prepared-task launcher is used for the subsequent finite-versus-infinite gate
+ablation and the full rerun after the development selection is frozen.
+
 ## Experiment Tracking
 
 We use [MLflow](https://mlflow.org/) for comprehensive experiment tracking and results visualization. MLflow tracks:

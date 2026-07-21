@@ -63,6 +63,27 @@ def test_task_csv_roundtrip_and_named_mode_command(tmp_path):
     assert "--no-save-episode-data" in command
 
 
+def test_task_command_can_override_nu(tmp_path):
+    add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", [3000])
+    task = prepare_tasks(
+        protocol(), tmp_path, "matrix", ["pendulum"], ["conservative"]
+    )[0]
+    task = task.__class__(
+        **{**task.__dict__, "calf_change_rate": 0.125, "nu_calibration_n": 10}
+    )
+
+    command = evaluation_command(
+        task,
+        tracking_uri="http://tracking",
+        experiment_prefix="sweep",
+        device="cuda:0",
+        result_path=tmp_path / "result.json",
+    )
+
+    assert command[command.index("--calf.calf-change-rate") + 1] == "0.125"
+    assert command[command.index("--nu-calibration-n") + 1] == "10"
+
+
 def test_shuffled_task_shards_are_deterministic_disjoint_and_complete(tmp_path):
     add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", range(3000, 33000, 3000))
     tasks = prepare_tasks(

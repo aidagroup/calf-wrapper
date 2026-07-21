@@ -133,6 +133,12 @@ class EvalConfig:
     checkpoint_step: Optional[int] = None
     """Training step encoded by the evaluated checkpoint"""
 
+    nu_calibration_n: Optional[float] = None
+    """Denominator n used by the calibrated-nu rule, when applicable"""
+
+    nu_calibration_rule: Optional[str] = None
+    """Named deterministic rule used to calibrate nu, when applicable"""
+
 
 presets = {
     # Preset configurations for different environments
@@ -266,17 +272,19 @@ def run_episode(
     data = []
     active = np.ones(env.num_envs, dtype=bool)
     for step in range(n_steps):
+        obs_snapshot = np.copy(obs)
         action = get_action(obs)
+        action_snapshot = np.copy(action)
         next_obs, reward, is_done, info = env.step(action)
         data.append(
             {
                 "step": step,
-                "obs": obs,
-                "action": action,
-                "reward": reward,
-                "is_done": is_done,
+                "obs": obs_snapshot,
+                "action": action_snapshot,
+                "reward": np.copy(reward),
+                "is_done": np.copy(is_done),
                 "info": info,
-                "next_obs": next_obs,
+                "next_obs": np.copy(next_obs),
                 "active": np.copy(active),
             }
         )
@@ -290,12 +298,12 @@ def run_episode(
 
 def goal_reaching_mask(env_id: str, latest_obs: np.ndarray) -> np.ndarray:
     if env_id == "Pendulum-v1":
-        return np.prod(
+        return np.all(
             np.abs(latest_obs - np.array([[1, 0, 0]])) < np.array([[0.05, 0.05, 0.3]]),
             axis=1,
         )
     elif env_id == "CartpoleSwingupEnvLong-v0":
-        return np.prod(
+        return np.all(
             np.abs(latest_obs - np.array([[0, 0, 1, 0, 0]]))
             < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
             axis=1,
@@ -344,6 +352,9 @@ def trial_successes(env_id: str, data: list[dict[str, Any]]) -> np.ndarray:
 
 
 def resolve_calf_parameters(config: EvalConfig) -> dict[str, float | str]:
+    improvement_threshold: float | str = config.calf.calf_change_rate
+    if np.isposinf(config.calf.calf_change_rate):
+        improvement_threshold = "infinity"
     if config.calf.mode == "custom":
         target = normalized_acceptance_budget(
             config.calf.relaxprob_init,
@@ -352,6 +363,7 @@ def resolve_calf_parameters(config: EvalConfig) -> dict[str, float | str]:
         )
         return {
             "mode": "custom",
+            "improvement_threshold": improvement_threshold,
             "target_acceptance_budget": target,
             "acceptance_budget_lower_bound": target,
             "relaxprob_init": config.calf.relaxprob_init,
@@ -360,6 +372,7 @@ def resolve_calf_parameters(config: EvalConfig) -> dict[str, float | str]:
     resolved = resolve_calf_mode(config.calf.mode, config.n_steps)
     return {
         "mode": resolved.mode,
+        "improvement_threshold": improvement_threshold,
         "target_acceptance_budget": resolved.target_acceptance_budget,
         "acceptance_budget_lower_bound": resolved.acceptance_budget_lower_bound,
         "relaxprob_init": resolved.relaxprob_init,
@@ -514,6 +527,8 @@ def main(config: EvalConfig):
         "task_id": config.task_id,
         "training_seed": config.training_seed,
         "checkpoint_step": config.checkpoint_step,
+        "nu_calibration_n": config.nu_calibration_n,
+        "nu_calibration_rule": config.nu_calibration_rule,
         "model_path": str(config.model_path),
         "evaluation_seed": config.seed,
         "horizon": config.n_steps,
