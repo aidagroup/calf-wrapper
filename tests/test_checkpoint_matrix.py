@@ -84,6 +84,32 @@ def test_task_command_can_override_nu(tmp_path):
     assert command[command.index("--nu-calibration-n") + 1] == "10"
 
 
+def test_prepare_tasks_applies_environment_specific_nu_only_to_wrapper(tmp_path):
+    add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", [3000])
+    configured = protocol()
+    configured["calf"]["improvement_threshold_by_environment"] = {
+        "pendulum": 0.015502
+    }
+    configured["calf"]["improvement_threshold_rule"] = "reward_local_goal_span"
+
+    tasks = prepare_tasks(
+        configured,
+        tmp_path,
+        "matrix",
+        ["pendulum"],
+        ["fallback", "base", "conservative", "balanced"],
+    )
+
+    wrapper = [task for task in tasks if task.eval_mode == "calf_wrapper"]
+    controls = [task for task in tasks if task.eval_mode != "calf_wrapper"]
+    assert {task.calf_change_rate for task in wrapper} == {0.015502}
+    assert {task.nu_calibration_rule for task in wrapper} == {
+        "reward_local_goal_span"
+    }
+    assert all(task.calf_change_rate is None for task in controls)
+    assert all(task.nu_calibration_rule is None for task in controls)
+
+
 def test_shuffled_task_shards_are_deterministic_disjoint_and_complete(tmp_path):
     add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", range(3000, 33000, 3000))
     tasks = prepare_tasks(

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import random
 import shlex
@@ -100,6 +101,26 @@ def prepare_tasks(
     tasks = []
     for environment in environments:
         config = protocol["environments"][environment]
+        threshold_by_environment = protocol.get("calf", {}).get(
+            "improvement_threshold_by_environment"
+        )
+        reward_local_threshold = None
+        reward_local_rule = None
+        if threshold_by_environment is not None:
+            if environment not in threshold_by_environment:
+                raise ValueError(
+                    f"missing improvement threshold for environment: {environment}"
+                )
+            reward_local_threshold = float(threshold_by_environment[environment])
+            if not math.isfinite(reward_local_threshold) or reward_local_threshold <= 0:
+                raise ValueError(
+                    f"improvement threshold for {environment} must be positive and finite"
+                )
+            reward_local_rule = str(
+                protocol["calf"].get(
+                    "improvement_threshold_rule", "environment_specific"
+                )
+            )
         checkpoints = discover_checkpoints(config, artifacts_root)
         if not checkpoints:
             raise RuntimeError(f"no eligible checkpoints found for {environment}")
@@ -153,6 +174,14 @@ def prepare_tasks(
                         calf_mode=calf_mode,
                         evaluation_seed=eval_seed,
                         n_envs=n_envs,
+                        calf_change_rate=(
+                            reward_local_threshold
+                            if eval_mode == "calf_wrapper"
+                            else None
+                        ),
+                        nu_calibration_rule=(
+                            reward_local_rule if eval_mode == "calf_wrapper" else None
+                        ),
                     )
                 )
     return tasks
