@@ -27,6 +27,62 @@ The repository contains:
 - Training and evaluation scripts
 - Reproduction scripts for paper experiments
 
+## Advantage-based intervention baseline
+
+The repository also implements a SAILR-style, deployment-time intervention
+baseline for frozen base policies.  It is deliberately separated into two
+stages:
+
+1. `run/train_intervention_critic.py` collects paired fork rollouts.  Both
+   branches replay the same base/fallback prefix from the same seeded initial
+   condition.  One branch then takes the base action and the other takes the
+   fallback action; both subsequently execute the fallback policy until the
+   evaluation horizon.  The resulting targets train
+   `Q_goal(s, a, remaining_steps)`, the expected fraction of the continuation
+   spent outside the goal set.
+2. `AdvantageInterventionWrapper` accepts the frozen base action only when
+   `Q_goal(s, a_base) - Q_goal(s, a_fallback) <= eta`.  Otherwise it applies
+   the existing environment-specific fallback action.
+
+Train a critic and evaluate it with the same frozen checkpoint:
+
+```sh
+uv run python run/train_intervention_critic.py pendulum
+
+uv run python run/eval.py pendulum \
+  --eval-mode advantage_intervention \
+  --intervention.critic-path run/artifacts/intervention/pendulum/goal_cost_critic.pt \
+  --intervention.threshold 0.0
+```
+
+The presets `pendulum`, `cartpole`, `underwater-drone`, and
+`robot-navigation` are available to both commands.  Critic checkpoints record
+the environment, frozen base checkpoint, collection seed, terminal failure
+rates, and train/validation diagnostics.  In particular, the training report
+includes the fraction of anchors for which the base action has a higher
+outside-goal occupancy cost than the fallback action.  A zero fraction means
+that the collected targets cannot identify useful interventions.
+
+This is the advantage-based intervention rule used as a fixed deployment
+wrapper, not the complete SAILR training algorithm: the PPO/TD3 policy is not
+updated from intervention data.
+
+Run critic training and an intervention-threshold sweep for all four
+environments with one command:
+
+```sh
+uv run python scripts/run_intervention_baseline.py \
+  --environment all \
+  --n-anchors 2000 \
+  --thresholds 0.0,0.01,0.025,0.05
+```
+
+Use `--dry-run` to inspect every generated command or `--skip-training` to
+repeat only evaluation from existing critic checkpoints.  The launcher also
+evaluates pure base and fallback controls by default.  Use distinct
+`--critic-seed` and `--evaluation-seed` values, and reserve an additional held-
+out evaluation seed after selecting the intervention threshold.
+
 The `UnderwaterDrone-v0` and `RobotNavigationConstSpeedCatch-v0`
 environments are synchronized from
 `aidagroup/calf-enhance@afb5edc49427054c99d6fbfe87b603d126724eb8` so the

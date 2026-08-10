@@ -1,6 +1,6 @@
 # Main evaluation script
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Any, Literal, Optional
 from pathlib import Path
 import os
@@ -20,6 +20,10 @@ from stable_baselines3 import PPO
 
 from gymnasium.wrappers.record_video import RecordVideo
 from src.calf_wrapper import CALFWrapper
+from src.advantage_intervention import (
+    AdvantageInterventionWrapper,
+    GoalCostCritic,
+)
 from src.utils.mlflow import mlflow_monitoring, MlflowConfig
 from src.controllers.pendulum import EnergyBasedStabilizingPolicy
 from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
@@ -28,7 +32,7 @@ from src.utils import NumpyEncoder
 from src import run_path
 from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalController
 from src.controllers.underwaterdrone import UnderwaterDroneNominalController
-from src.envs.underwaterdrone import HOLE_WIDTH, TOP_Y
+from src.goal_reaching import goal_reaching_mask
 from src.models.cleanrl_td3 import CleanRLTD3
 from src.calf_modes import (
     CalfMode,
@@ -63,6 +67,20 @@ class CalfConfig:
 
 
 @dataclass
+class InterventionConfig:
+    """Configuration for SAILR-style deployment-time intervention."""
+
+    critic_path: Optional[Path] = None
+    """Checkpoint produced by run/train_intervention_critic.py"""
+
+    threshold: float = 0.0
+    """Maximum permitted base-minus-fallback goal cost"""
+
+    device: str = "cpu"
+    """Device used for goal-cost critic inference"""
+
+
+@dataclass
 class EvalConfig:
     """Configuration for evaluating trained policies with optional CALF integration."""
 
@@ -93,11 +111,17 @@ class EvalConfig:
     n_steps: int
     """Number of evaluation steps to run"""
 
-    eval_mode: Literal["fallback", "base", "calf_wrapper"] = "fallback"
+    intervention: InterventionConfig = field(default_factory=InterventionConfig)
+    """Advantage-based intervention configuration"""
+
+    eval_mode: Literal["fallback", "base", "calf_wrapper", "advantage_intervention"] = (
+        "fallback"
+    )
     """Evaluation mode:
     - fallback: Use CALF with fallback to stabilizing controller
     - base: Evaluate pure learned policy
     - calf_wrapper: Use full CALF framework with probability-based switching
+    - advantage_intervention: Compare base and fallback finite-horizon goal cost
     """
 
     n_envs: int = 1
@@ -296,28 +320,6 @@ def run_episode(
     return data
 
 
-def goal_reaching_mask(env_id: str, latest_obs: np.ndarray) -> np.ndarray:
-    if env_id == "Pendulum-v1":
-        return np.all(
-            np.abs(latest_obs - np.array([[1, 0, 0]])) < np.array([[0.05, 0.05, 0.3]]),
-            axis=1,
-        )
-    elif env_id == "CartpoleSwingupEnvLong-v0":
-        return np.all(
-            np.abs(latest_obs - np.array([[0, 0, 1, 0, 0]]))
-            < np.array([[0.3, 0.3, 0.05, 0.05, 0.05]]),
-            axis=1,
-        )
-    elif env_id == "UnderwaterDrone-v0":
-        return (latest_obs[:, 1] >= TOP_Y) & (
-            np.abs(latest_obs[:, 0]) <= HOLE_WIDTH / 2.0
-        )
-    elif env_id == "RobotNavigationConstSpeedCatch-v0":
-        return np.linalg.norm(latest_obs[:, 0:2] - latest_obs[:, 4:6], axis=1) <= 0.05
-    else:
-        raise ValueError(f"Unknown environment: {env_id}")
-
-
 def goal_reaching_rate(env_id: str, latest_obs: np.ndarray) -> float:
     return float(np.mean(goal_reaching_mask(env_id, latest_obs)) * 100)
 
@@ -471,6 +473,38 @@ def main(config: EvalConfig):
             env,
             config.n_steps,
         )
+    elif config.eval_mode == "advantage_intervention":
+        if config.intervention.critic_path is None:
+            raise ValueError(
+                "intervention.critic_path is required for advantage_intervention"
+            )
+        model = load_model(config)
+        goal_cost_critic, critic_metadata = GoalCostCritic.load(
+            config.intervention.critic_path,
+            device=config.intervention.device,
+        )
+        critic_environment = critic_metadata.get("environment")
+        if critic_environment not in (None, config.env_id):
+            raise ValueError(
+                f"Goal-cost critic was trained for {critic_environment}, "
+                f"not {config.env_id}"
+            )
+        if goal_cost_critic.horizon != config.n_steps:
+            raise ValueError(
+                f"Goal-cost critic horizon {goal_cost_critic.horizon} does not match "
+                f"evaluation horizon {config.n_steps}"
+            )
+        env = AdvantageInterventionWrapper(
+            env,
+            goal_cost_critic=goal_cost_critic,
+            fallback_policy=config.stabilizing_policy,
+            threshold=config.intervention.threshold,
+        )
+        data = run_episode(
+            lambda obs: model.predict(obs, deterministic=config.deterministic)[0],
+            env,
+            config.n_steps,
+        )
     else:
         raise ValueError(f"Unknown eval mode: {config.eval_mode}")
     env.close()
@@ -511,6 +545,41 @@ def main(config: EvalConfig):
         metrics["probabilistic_acceptance_fraction"] = float(
             np.mean([info["calf.probabilistic_acceptance"] for info in calf_infos])
         )
+    intervention_infos = [
+        info
+        for item in data
+        for active, info in zip(item["active"], item["info"])
+        if active and "intervention.base_action_applied" in info
+    ]
+    if intervention_infos:
+        base_fraction = float(
+            np.mean(
+                [
+                    info["intervention.base_action_applied"]
+                    for info in intervention_infos
+                ]
+            )
+        )
+        metrics["base_action_fraction"] = base_fraction
+        metrics["fallback_action_fraction"] = 1.0 - base_fraction
+        metrics["mean_base_goal_cost"] = float(
+            np.mean(
+                [info["intervention.base_goal_cost"] for info in intervention_infos]
+            )
+        )
+        metrics["mean_fallback_goal_cost"] = float(
+            np.mean(
+                [info["intervention.fallback_goal_cost"] for info in intervention_infos]
+            )
+        )
+        metrics["mean_goal_cost_advantage"] = float(
+            np.mean(
+                [
+                    info["intervention.goal_cost_advantage"]
+                    for info in intervention_infos
+                ]
+            )
+        )
     mlflow.log_metrics(metrics)
 
     summary = {
@@ -533,6 +602,15 @@ def main(config: EvalConfig):
         "evaluation_seed": config.seed,
         "horizon": config.n_steps,
         "calf": resolved_calf,
+        "intervention": {
+            "critic_path": (
+                str(config.intervention.critic_path)
+                if config.intervention.critic_path is not None
+                else None
+            ),
+            "threshold": config.intervention.threshold,
+            "device": config.intervention.device,
+        },
         "metrics": metrics,
         "mlflow_run_id": mlflow.active_run().info.run_id,
     }
