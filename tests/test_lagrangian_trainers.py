@@ -227,7 +227,7 @@ def test_td3_checkpoint_disk_round_trip(tmp_path):
     reward_q2 = td3_lag.QNetwork(observation_size, action_size)
     target_reward_q1 = copy.deepcopy(reward_q1)
     target_reward_q2 = copy.deepcopy(reward_q2)
-    cost_q = td3_lag.QNetwork(observation_size, action_size)
+    cost_q = td3_lag.CostQNetwork(observation_size, action_size)
     target_cost_q = copy.deepcopy(cost_q)
     actor_optimizer = torch.optim.Adam(actor.parameters())
     reward_q_optimizer = torch.optim.Adam(
@@ -318,6 +318,38 @@ def test_td3_initial_state_dual_estimate_uses_current_actor_and_cost_critic():
         actor, cost_q, initial_observations
     )
     assert changed == pytest.approx(0.2)
+
+
+def test_td3_cost_critic_is_a_bounded_failure_probability():
+    critic = td3_lag.CostQNetwork(observation_size=3, action_size=2)
+    observations = torch.randn(128, 3) * 100.0
+    actions = torch.randn(128, 2) * 100.0
+    probabilities = critic(observations, actions)
+    assert torch.isfinite(probabilities).all()
+    assert torch.all(probabilities >= 0.0)
+    assert torch.all(probabilities <= 1.0)
+
+
+def test_td3_cost_probability_loss_accepts_soft_targets_and_rejects_invalid_ones():
+    logits = torch.tensor([-2.0, 0.0, 2.0], requires_grad=True)
+    targets = torch.tensor([0.0, 0.4, 1.0])
+    loss = td3_lag.cost_probability_loss(logits, targets)
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert torch.isfinite(logits.grad).all()
+    with pytest.raises(FloatingPointError, match="probability interval"):
+        td3_lag.cost_probability_loss(logits.detach(), torch.tensor([0.0, 1.1, 1.0]))
+
+
+def test_td3_bounded_target_network_keeps_cost_bellman_target_in_range():
+    critic = td3_lag.CostQNetwork(observation_size=3, action_size=2)
+    next_probabilities = critic(torch.randn(16, 3), torch.randn(16, 2)).squeeze(-1)
+    costs = torch.zeros(16)
+    dones = torch.zeros(16)
+    costs[0] = 1.0
+    dones[0] = 1.0
+    targets = td3_lag.cost_bellman_target(costs, dones, next_probabilities)
+    td3_lag.require_probability("test targets", targets)
 
 
 def test_td3_primal_step_reduces_cost_when_reward_is_flat():

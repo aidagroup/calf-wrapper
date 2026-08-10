@@ -241,16 +241,25 @@ Cost is undiscounted, `gamma_C = 1`:
 y_C=c+(1-d)Q_{C,\mathrm{target}}(\widetilde S',A').
 \]
 
-The cost critic minimizes
+The cost critic represents a failure probability using a bounded output,
 
 \[
-L_C=\mathbb E[(Q_C(\widetilde S,A)-y_C)^2].
+Q_C(\widetilde S,A)=\sigma(f_C(\widetilde S,A))\in(0,1).
 \]
 
-Because there is at most one unit terminal cost, the true action value is a
-failure probability in `[0, 1]`. The implementation should log the fraction of
-predictions outside this interval, but should not clamp training targets in a
-way that hides divergence.
+Its target network has the same bounded parameterization. Since terminal cost
+and the target-network output both lie in `[0,1]`, the Bellman target also lies
+in `[0,1]`. The cost critic minimizes binary cross-entropy with logits using
+the bootstrapped target as a soft Bernoulli label,
+
+\[
+L_C=\mathbb E[\operatorname{BCEWithLogits}(f_C(\widetilde S,A),y_C)].
+\]
+
+The implementation fails immediately if a target leaves `[0,1]` and logs both
+the out-of-range fraction and the fraction of saturated predictions. This
+bounded model encodes the range of the true action value rather than clipping
+an unbounded target after divergence.
 
 ## Actor objective
 
@@ -414,12 +423,15 @@ Before full AUV or Robot training:
 7. Cost targets use `gamma_C = 1`.
 8. The multiplier changes in the correct direction using clipped initial-state
    cost-critic estimates for the current deterministic actor.
-9. At multiplier zero, the actor and reward-critic updates reduce to the copied
+9. The cost critic and its target network return values in `[0,1]`, the cost
+   Bellman target remains in `[0,1]`, and cost training uses binary
+   cross-entropy with logits.
+10. At multiplier zero, the actor and reward-critic updates reduce to the copied
    CleanRL TD3 logic, apart from the declared finite-horizon timeout handling
    and fixed reward scaling.
-10. Mean episode cost equals one minus goal-reaching probability.
-11. Evaluation does not mutate train state.
-12. Checkpoint loading reproduces deterministic actor actions.
+11. Mean episode cost equals one minus goal-reaching probability.
+12. Evaluation does not mutate train state.
+13. Checkpoint loading reproduces deterministic actor actions.
 13. Reward and cost losses, values, actions, and gradient norms remain finite.
 14. Short smoke runs complete on both AUV and Robot and contain at least one
     complete episode.

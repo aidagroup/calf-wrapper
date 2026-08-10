@@ -31,7 +31,7 @@ import src  # noqa: F401  # Register custom environments.
 from src import run_path
 from src.goal_reaching import goal_reaching_mask
 
-CHECKPOINT_FORMAT = "calf-wrapper-cleanrl-td3-lagrangian-v1"
+CHECKPOINT_FORMAT = "calf-wrapper-cleanrl-td3-lagrangian-v2"
 
 
 @dataclass
@@ -275,6 +275,21 @@ def require_finite(name: str, *tensors: torch.Tensor) -> None:
         raise FloatingPointError(f"non-finite values detected in {name}")
 
 
+def require_probability(name: str, tensor: torch.Tensor) -> None:
+    require_finite(name, tensor)
+    if bool(((tensor < 0.0) | (tensor > 1.0)).any()):
+        raise FloatingPointError(f"{name} left the probability interval [0, 1]")
+
+
+def cost_probability_loss(
+    logits: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """Bernoulli cross-entropy for bootstrapped soft failure targets."""
+
+    require_probability("cost critic targets", targets)
+    return F.binary_cross_entropy_with_logits(logits, targets)
+
+
 def actor_lagrangian_loss(
     reward_value: torch.Tensor,
     cost_value: torch.Tensor,
@@ -366,6 +381,26 @@ class QNetwork(nn.Module):
 
     def forward(self, observation: torch.Tensor, action: torch.Tensor):
         return self.network(torch.cat([observation, action], dim=1))
+
+
+class CostQNetwork(nn.Module):
+    """Bounded critic representing a failure probability."""
+
+    def __init__(self, observation_size: int, action_size: int):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(observation_size + action_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+        )
+
+    def logits(self, observation: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        return self.network(torch.cat([observation, action], dim=1))
+
+    def forward(self, observation: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        return torch.sigmoid(self.logits(observation, action))
 
 
 class Actor(nn.Module):
@@ -513,8 +548,8 @@ def save_checkpoint(
     reward_q2: QNetwork,
     target_reward_q1: QNetwork,
     target_reward_q2: QNetwork,
-    cost_q: QNetwork,
-    target_cost_q: QNetwork,
+    cost_q: CostQNetwork,
+    target_cost_q: CostQNetwork,
     actor_optimizer: optim.Optimizer,
     reward_q_optimizer: optim.Optimizer,
     cost_q_optimizer: optim.Optimizer,
@@ -642,8 +677,8 @@ def run_training(args: Args) -> None:
     target_reward_q2 = QNetwork(observation_size, action_size).to(device)
     target_reward_q1.load_state_dict(reward_q1.state_dict())
     target_reward_q2.load_state_dict(reward_q2.state_dict())
-    cost_q = QNetwork(observation_size, action_size).to(device)
-    target_cost_q = QNetwork(observation_size, action_size).to(device)
+    cost_q = CostQNetwork(observation_size, action_size).to(device)
+    target_cost_q = CostQNetwork(observation_size, action_size).to(device)
     target_cost_q.load_state_dict(cost_q.state_dict())
     actor_optimizer = optim.Adam(actor.parameters(), lr=args.learning_rate)
     reward_q_optimizer = optim.Adam(
@@ -768,6 +803,7 @@ def run_training(args: Args) -> None:
                 cost_target = cost_bellman_target(
                     data["costs"], data["dones"], next_cost_q
                 )
+                require_probability("cost Bellman targets", cost_target)
                 require_finite("TD3 targets", reward_target, cost_target, next_action)
 
             reward_q1_value = reward_q1(data["observations"], data["actions"]).squeeze(
@@ -786,8 +822,11 @@ def run_training(args: Args) -> None:
             )
             reward_q_optimizer.step()
 
-            cost_q_value = cost_q(data["observations"], data["actions"]).squeeze(-1)
-            cost_q_loss = F.mse_loss(cost_q_value, cost_target)
+            cost_q_logits = cost_q.logits(
+                data["observations"], data["actions"]
+            ).squeeze(-1)
+            cost_q_value = torch.sigmoid(cost_q_logits)
+            cost_q_loss = cost_probability_loss(cost_q_logits, cost_target)
             cost_q_optimizer.zero_grad()
             cost_q_loss.backward()
             cost_q_gradient_norm = parameter_gradient_norm(cost_q.parameters())
@@ -862,6 +901,18 @@ def run_training(args: Args) -> None:
                         "actor_cost_value": float(actor_cost_value.item()),
                         "cost_q_out_of_range_fraction": float(
                             ((cost_q_value < 0.0) | (cost_q_value > 1.0))
+                            .float()
+                            .mean()
+                            .item()
+                        ),
+                        "cost_q_saturation_fraction": float(
+                            ((cost_q_value < 0.01) | (cost_q_value > 0.99))
+                            .float()
+                            .mean()
+                            .item()
+                        ),
+                        "cost_target_out_of_range_fraction": float(
+                            ((cost_target < 0.0) | (cost_target > 1.0))
                             .float()
                             .mean()
                             .item()
