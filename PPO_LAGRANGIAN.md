@@ -349,12 +349,13 @@ At minimum, the CLI exposes:
 
 Default experiment budgets match the existing PPO runs:
 
-- Pendulum: 102,000 environment steps, seed 9;
-- CartPole: 300,000 environment steps, seed 42.
+- Pendulum: 102,000 environment steps, seeds 9, 10, and 11;
+- CartPole: 300,000 environment steps, seeds 42, 43, and 44.
 
 The paired reproduction comparison uses the existing trained-policy seeds:
-Pendulum seed 9 and CartPole seed 42. Any additional training-seed robustness
-study must be reported separately rather than pooled with the paired trials.
+Pendulum seed 9 and CartPole seed 42. Seeds 10--11 and 43--44 provide the
+separate training-seed robustness assessment and are not pooled with the
+paired trials.
 
 ## Evaluation and statistics
 
@@ -458,6 +459,13 @@ It renders commands by default. `--execute` starts them, refuses to overwrite
 an existing output directory, and requires a clean commit contained in a
 remote branch. Only smoke runs may bypass that repository check with
 `--allow-dirty`.
+
+Every matrix run uses the MLflow server at `http://192.168.1.5:5001` by
+default and belongs to `CALF-Wrapper/Lagrangian-Baselines`.
+One MLflow run corresponds to one algorithm, environment, and training seed.
+It records the complete configuration, source revision, host, training
+metrics, final held-out and paired evaluations, raw-trial JSON, JSONL training
+records, and checkpoint.
 
 The displayed PPO hyperparameters, including the multiplier update rate, are
 frozen before held-out evaluation. Any calibration must use separate training

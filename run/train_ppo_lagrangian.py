@@ -11,12 +11,14 @@ from __future__ import annotations
 import json
 import math
 import random
+import socket
 import subprocess
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import gymnasium as gym
+import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
@@ -66,6 +68,9 @@ class Args:
     paired_evaluation_episodes: int = 30
     paired_evaluation_seed: int = 42
     output_dir: Path = run_path / "artifacts" / "ppo_lagrangian"
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str = "CALF-Wrapper/Lagrangian-Baselines"
+    mlflow_run_name: str | None = None
 
 
 PRESETS = {
@@ -98,6 +103,21 @@ def append_jsonl(path: Path, record: dict[str, object]) -> None:
         stream.write(json.dumps(record) + "\n")
 
 
+def log_mlflow_metrics(record: dict[str, object], step: int, prefix: str) -> None:
+    """Log the finite numeric portion of a record to the active MLflow run."""
+    if mlflow.active_run() is None:
+        return
+    metrics: dict[str, float] = {}
+    for key, value in record.items():
+        if key == "step" or not isinstance(value, (bool, int, float)):
+            continue
+        numeric_value = float(value)
+        if math.isfinite(numeric_value):
+            metrics[f"{prefix}/{key}"] = numeric_value
+    if metrics:
+        mlflow.log_metrics(metrics, step=step)
+
+
 def source_metadata() -> dict[str, object]:
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -114,6 +134,7 @@ def source_metadata() -> dict[str, object]:
     return {
         "git_revision": revision.stdout.strip() if revision.returncode == 0 else None,
         "git_dirty": bool(dirty.stdout.strip()) if dirty.returncode == 0 else None,
+        "hostname": socket.gethostname(),
         "torch_version": torch.__version__,
         "numpy_version": np.__version__,
     }
@@ -505,7 +526,7 @@ def evaluate(
     }
 
 
-def main(args: Args) -> None:
+def run_training(args: Args) -> None:
     supported_tasks = {
         ("Pendulum-v1", 200),
         ("CartpoleSwingupEnvLong-v0", 1000),
@@ -774,6 +795,7 @@ def main(args: Args) -> None:
                 "sps": int(global_step / max(time.time() - started_at, 1e-9)),
             }
             append_jsonl(metrics_path, record)
+            log_mlflow_metrics(record, global_step, "train")
             print(json.dumps(record), flush=True)
 
     envs.close()
@@ -823,13 +845,65 @@ def main(args: Args) -> None:
     evaluation["completed_training_episodes"] = len(completed_costs)
     evaluation["config"] = serializable_config(args)
     evaluation["runtime"] = source_metadata()
+    active_run = mlflow.active_run()
+    evaluation["mlflow"] = {
+        "tracking_uri": args.mlflow_tracking_uri,
+        "experiment_name": args.mlflow_experiment_name,
+        "run_name": args.mlflow_run_name,
+        "run_id": active_run.info.run_id if active_run is not None else None,
+    }
     evaluation["deterministic_evaluation"] = deterministic_evaluation
     evaluation["paired_deterministic_evaluation"] = paired_evaluation
     result_path = (
         args.output_dir / f"ppo_lagrangian_{args.environment}_seed{args.seed}.json"
     )
     result_path.write_text(json.dumps(evaluation, indent=2) + "\n")
+    log_mlflow_metrics(evaluation, global_step, "evaluation/stochastic")
+    log_mlflow_metrics(
+        deterministic_evaluation, global_step, "evaluation/deterministic"
+    )
+    log_mlflow_metrics(paired_evaluation, global_step, "evaluation/paired")
+    if active_run is not None:
+        mlflow.log_artifacts(str(args.output_dir), artifact_path="outputs")
     print(json.dumps(evaluation, indent=2), flush=True)
+
+
+def main(args: Args) -> None:
+    if args.mlflow_tracking_uri is None:
+        run_training(args)
+        return
+    mlflow.set_tracking_uri(args.mlflow_tracking_uri)
+    mlflow.set_experiment(args.mlflow_experiment_name)
+    run_name = args.mlflow_run_name or (
+        f"ppo-lagrangian__{args.environment}__seed-{args.seed}"
+    )
+    args.mlflow_run_name = run_name
+    with mlflow.start_run(run_name=run_name):
+        runtime = source_metadata()
+        mlflow.set_tags(
+            {
+                "repro.run_status": "RUNNING",
+                "algorithm": "ppo-lagrangian",
+                "environment": args.environment,
+                "env_id": args.env_id,
+                "training_seed": str(args.seed),
+                **{f"runtime.{key}": str(value) for key, value in runtime.items()},
+            }
+        )
+        parameters = serializable_config(args)
+        parameters.pop("mlflow_tracking_uri", None)
+        mlflow.log_params(parameters)
+        try:
+            run_training(args)
+        except BaseException as error:
+            mlflow.set_tags(
+                {
+                    "repro.run_status": "FAILED",
+                    "repro.failure_type": type(error).__name__,
+                }
+            )
+            raise
+        mlflow.set_tag("repro.run_status", "COMPLETED")
 
 
 if __name__ == "__main__":

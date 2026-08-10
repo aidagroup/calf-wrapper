@@ -15,22 +15,22 @@ MATRIX = {
     "pendulum": {
         "trainer": "run/train_ppo_lagrangian.py",
         "preset": "pendulum",
-        "seeds": [9],
+        "seeds": [9, 10, 11],
     },
     "cartpole": {
         "trainer": "run/train_ppo_lagrangian.py",
         "preset": "cartpole",
-        "seeds": [42],
+        "seeds": [42, 43, 44],
     },
     "underwater-drone": {
         "trainer": "run/train_td3_lagrangian.py",
         "preset": "underwater-drone",
-        "seeds": list(range(10)),
+        "seeds": [0, 1, 2],
     },
     "robot-navigation": {
         "trainer": "run/train_td3_lagrangian.py",
         "preset": "robot-navigation",
-        "seeds": list(range(1, 11)),
+        "seeds": [1, 2, 3],
     },
 }
 
@@ -41,6 +41,8 @@ def command_for(
     device: str,
     output_root: Path,
     smoke: bool,
+    tracking_uri: str | None = None,
+    experiment_name: str = "CALF-Wrapper/Lagrangian-Baselines",
 ) -> list[str]:
     config = MATRIX[environment]
     command = [
@@ -62,6 +64,16 @@ def command_for(
         "--output-dir",
         str(output_root / environment / f"seed-{seed}"),
     ]
+    if tracking_uri is not None:
+        algorithm = "ppo" if environment in {"pendulum", "cartpole"} else "td3"
+        command += [
+            "--mlflow-tracking-uri",
+            tracking_uri,
+            "--mlflow-experiment-name",
+            experiment_name,
+            "--mlflow-run-name",
+            f"{algorithm}-lagrangian__{environment}__seed-{seed}",
+        ]
     if not smoke:
         return command
     if environment == "pendulum":
@@ -102,6 +114,8 @@ def command_for(
             "4",
             "--lambda-update-episodes",
             "1",
+            "--log-every",
+            "1",
             "--checkpoint-every",
             "0",
         ]
@@ -116,6 +130,8 @@ def command_for(
             "--batch-size",
             "4",
             "--lambda-update-episodes",
+            "1",
+            "--log-every",
             "1",
             "--checkpoint-every",
             "0",
@@ -132,6 +148,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
     )
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--tracking-uri", default="http://192.168.1.5:5001")
+    parser.add_argument(
+        "--experiment-name", default="CALF-Wrapper/Lagrangian-Baselines"
+    )
     parser.add_argument(
         "--output-root", type=Path, default=Path("run/artifacts/lagrangian")
     )
@@ -177,6 +197,8 @@ def main() -> None:
                 args.device,
                 args.output_root,
                 args.smoke,
+                args.tracking_uri,
+                args.experiment_name,
             )
             output_dir = Path(command[command.index("--output-dir") + 1])
             result_name = (

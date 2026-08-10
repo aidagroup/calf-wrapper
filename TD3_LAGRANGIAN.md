@@ -337,8 +337,10 @@ Reference full budgets match the existing TD3 experiments:
 - AUV: 3,000,000 environment steps;
 - Robot: 3,000,000 environment steps.
 
-The frozen full matrix uses AUV training seeds 0--9 and Robot training seeds
-1--10, matching the existing TD3 matrix.
+The frozen full matrix uses AUV training seeds 0, 1, and 2 and Robot training
+seeds 1, 2, and 3. Seeds 0 and 1, respectively, match the policies used in the
+existing manuscript table; the other two seeds per environment provide a
+separate training-seed robustness assessment.
 
 ## Evaluation and statistics
 
@@ -445,6 +447,13 @@ executes it only with `--execute`. Full execution refuses dirty or unpushed
 source revisions and refuses existing output directories. `--smoke` selects
 the short four-environment readiness configuration; `--allow-dirty` is
 restricted to those smoke runs.
+
+Every matrix run uses the MLflow server at `http://192.168.1.5:5001` by
+default and belongs to `CALF-Wrapper/Lagrangian-Baselines`.
+One MLflow run corresponds to one algorithm, environment, and training seed.
+It records the complete configuration, source revision, host, training
+metrics, final held-out and paired evaluations, raw-trial JSON, JSONL training
+records, and checkpoint.
 
 The displayed reward scale and multiplier parameters are frozen before the
 held-out schedule is evaluated. Any calibration must use disjoint training

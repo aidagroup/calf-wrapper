@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -10,6 +11,7 @@ import torch
 import src  # noqa: F401
 from run import train_ppo_lagrangian as ppo_lag
 from run import train_td3_lagrangian as td3_lag
+from scripts import run_lagrangian_matrix
 
 
 @pytest.mark.parametrize(
@@ -328,3 +330,24 @@ def test_td3_primal_step_reduces_cost_when_reward_is_flat():
     loss.backward()
     optimizer.step()
     assert action.item() < 0.8
+
+
+def test_lagrangian_launcher_routes_each_run_to_shared_mlflow():
+    command = run_lagrangian_matrix.command_for(
+        "pendulum",
+        seed=9,
+        device="cuda:0",
+        output_root=Path("artifacts"),
+        smoke=False,
+        tracking_uri="http://192.168.1.5:5001",
+        experiment_name="CALF-Wrapper/Lagrangian-Baselines",
+    )
+    assert command[command.index("--mlflow-tracking-uri") + 1] == (
+        "http://192.168.1.5:5001"
+    )
+    assert command[command.index("--mlflow-experiment-name") + 1] == (
+        "CALF-Wrapper/Lagrangian-Baselines"
+    )
+    assert command[command.index("--mlflow-run-name") + 1] == (
+        "ppo-lagrangian__pendulum__seed-9"
+    )
