@@ -63,6 +63,8 @@ dmypy.json
 
 # mlflow
 mlruns/
+outputs/
+*.log
 
 .pytest_cache/
 

@@ -1,0 +1,217 @@
+family,environment,stage,mode,comparison,test,mean_paired_difference,p_value,holm_adjusted_p_value,significant
+calfwrapper_vs_fallback_low,pendulum,Low,conservative,fallback,two-sided paired Wilcoxon signed-rank,1.1171342468261718,1.6411559471904777e-05,0.000147704035247143,True
+calfwrapper_vs_base_low,pendulum,Low,conservative,base,two-sided paired Wilcoxon signed-rank,724.0390591958817,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,pendulum,Low,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,1.1171342468261718,0.9999917942202641,1.0,False
+calfwrapper_vs_fallback_low,pendulum,Low,guarded,fallback,two-sided paired Wilcoxon signed-rank,-2.4027456814050674,0.19771455417381756,0.9885727708690878,False
+calfwrapper_vs_base_low,pendulum,Low,guarded,base,two-sided paired Wilcoxon signed-rank,720.5191792676504,4.0161556854627e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,pendulum,Low,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-2.4027456814050674,0.9011427229130913,1.0,False
+calfwrapper_vs_fallback_low,pendulum,Low,moderate,fallback,two-sided paired Wilcoxon signed-rank,-153.22046467959882,1.611951563726507e-10,1.6119515637265069e-09,True
+calfwrapper_vs_base_low,pendulum,Low,moderate,base,two-sided paired Wilcoxon signed-rank,569.7014602694567,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,pendulum,Low,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-153.22046467959882,0.9999999999194025,1.0,False
+calfwrapper_vs_fallback_low,pendulum,Low,balanced,fallback,two-sided paired Wilcoxon signed-rank,-301.29885289371015,4.0244345767685424e-16,6.841538780506522e-15,True
+calfwrapper_vs_base_low,pendulum,Low,balanced,base,two-sided paired Wilcoxon signed-rank,421.6230720553454,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,pendulum,Low,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-301.29885289371015,0.9999999999999998,1.0,False
+calfwrapper_vs_fallback_low,pendulum,Low,high,fallback,two-sided paired Wilcoxon signed-rank,-515.9712614172697,1.0335846015401495e-17,1.860452282772269e-16,True
+calfwrapper_vs_base_low,pendulum,Low,high,base,two-sided paired Wilcoxon signed-rank,206.95066353178584,4.139373908714419e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,pendulum,Low,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-515.9712614172697,1.0,1.0,False
+calfwrapper_vs_fallback_low,pendulum,Low,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-677.3905446356534,8.33039747348591e-18,1.5827755199623227e-16,True
+calfwrapper_vs_base_low,pendulum,Low,almost_open,base,two-sided paired Wilcoxon signed-rank,45.53138031340204,4.782479999455785e-15,7.173719999183677e-14,True
+calfwrapper_above_both_low,pendulum,Low,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-677.3905446356534,1.0,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,conservative,fallback,two-sided paired Wilcoxon signed-rank,9.875475349426269,0.8505038034834054,1.0,False
+calfwrapper_vs_base_low,cartpole,Low,conservative,base,two-sided paired Wilcoxon signed-rank,403.4672940444946,2.006362112513044e-07,1.2038172675078264e-06,True
+calfwrapper_above_both_low,cartpole,Low,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,9.875475349426269,0.5747480982582973,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,guarded,fallback,two-sided paired Wilcoxon signed-rank,148.4435810470581,0.09071161614888014,0.603487865371173,False
+calfwrapper_vs_base_low,cartpole,Low,guarded,base,two-sided paired Wilcoxon signed-rank,542.0353997421265,7.42936583040727e-12,6.686429247366543e-11,True
+calfwrapper_above_both_low,cartpole,Low,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,148.4435810470581,0.04535580807444007,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,moderate,fallback,two-sided paired Wilcoxon signed-rank,-83.18436790466309,0.08621255219588186,0.603487865371173,False
+calfwrapper_vs_base_low,cartpole,Low,moderate,base,two-sided paired Wilcoxon signed-rank,310.4074507904053,9.042931792052953e-06,4.521465896026476e-05,True
+calfwrapper_above_both_low,cartpole,Low,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-83.18436790466309,0.9568937239020591,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,balanced,fallback,two-sided paired Wilcoxon signed-rank,-22.332977333068847,0.7335597164128502,1.0,False
+calfwrapper_vs_base_low,cartpole,Low,balanced,base,two-sided paired Wilcoxon signed-rank,371.2588413619995,1.373385951894828e-08,9.613701663263796e-08,True
+calfwrapper_above_both_low,cartpole,Low,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-22.332977333068847,0.6332201417935749,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,high,fallback,two-sided paired Wilcoxon signed-rank,43.054147720336914,0.8635033772834252,1.0,False
+calfwrapper_vs_base_low,cartpole,Low,high,base,two-sided paired Wilcoxon signed-rank,436.64596641540527,9.472454917086356e-13,1.0419700408794993e-11,True
+calfwrapper_above_both_low,cartpole,Low,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,43.054147720336914,0.5682483113582874,1.0,False
+calfwrapper_vs_fallback_low,cartpole,Low,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-91.25407730102539,0.010947806759784452,0.08758245407827561,False
+calfwrapper_vs_base_low,cartpole,Low,almost_open,base,two-sided paired Wilcoxon signed-rank,302.33774139404295,6.81828860689298e-15,9.545604049650172e-14,True
+calfwrapper_above_both_low,cartpole,Low,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-91.25407730102539,0.9945260966201078,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,conservative,fallback,two-sided paired Wilcoxon signed-rank,-487.8455236816406,5.263224472250727e-16,8.421159155601163e-15,True
+calfwrapper_vs_base_low,auv,Low,conservative,base,two-sided paired Wilcoxon signed-rank,4675.774722900391,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,auv,Low,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-487.8455236816406,0.9999999999999998,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,guarded,fallback,two-sided paired Wilcoxon signed-rank,-1228.6791088867187,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_low,auv,Low,guarded,base,two-sided paired Wilcoxon signed-rank,3934.9411376953126,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_low,auv,Low,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-1228.6791088867187,1.0,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,moderate,fallback,two-sided paired Wilcoxon signed-rank,-2818.1454290771485,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_low,auv,Low,moderate,base,two-sided paired Wilcoxon signed-rank,2345.4748175048826,6.311606041551026e-18,1.0729730270636745e-16,True
+calfwrapper_above_both_low,auv,Low,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-2818.1454290771485,1.0,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,balanced,fallback,two-sided paired Wilcoxon signed-rank,-3381.5835595703124,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_low,auv,Low,balanced,base,two-sided paired Wilcoxon signed-rank,1782.0366870117186,3.5716108787188483e-16,5.714577405950157e-15,True
+calfwrapper_above_both_low,auv,Low,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-3381.5835595703124,1.0,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,high,fallback,two-sided paired Wilcoxon signed-rank,-4202.186682128906,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_low,auv,Low,high,base,two-sided paired Wilcoxon signed-rank,961.433564453125,1.4111844085803348e-12,1.4111844085803348e-11,True
+calfwrapper_above_both_low,auv,Low,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-4202.186682128906,1.0,1.0,False
+calfwrapper_vs_fallback_low,auv,Low,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-4986.92029296875,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_low,auv,Low,almost_open,base,two-sided paired Wilcoxon signed-rank,176.69995361328125,0.9178441245028052,0.9178441245028052,False
+calfwrapper_above_both_low,auv,Low,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-4986.92029296875,1.0,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,conservative,fallback,two-sided paired Wilcoxon signed-rank,6.251858673095703,0.885758809181033,1.0,False
+calfwrapper_vs_base_low,robot,Low,conservative,base,two-sided paired Wilcoxon signed-rank,431.485403881073,3.415659060555646e-14,4.4403567787223405e-13,True
+calfwrapper_above_both_low,robot,Low,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,6.251858673095703,0.5571205954094836,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,guarded,fallback,two-sided paired Wilcoxon signed-rank,-86.12064291000367,2.6743020071878626e-11,2.941732207906649e-10,True
+calfwrapper_vs_base_low,robot,Low,guarded,base,two-sided paired Wilcoxon signed-rank,339.1129022979736,7.825473892963149e-13,9.390568671555779e-12,True
+calfwrapper_above_both_low,robot,Low,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-86.12064291000367,0.9999999999866285,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,moderate,fallback,two-sided paired Wilcoxon signed-rank,-206.44065395355224,1.6784884860821076e-12,2.014186183298529e-11,True
+calfwrapper_vs_base_low,robot,Low,moderate,base,two-sided paired Wilcoxon signed-rank,218.79289125442506,7.280145937261586e-09,5.824116749809269e-08,True
+calfwrapper_above_both_low,robot,Low,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-206.44065395355224,0.9999999999991608,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,balanced,fallback,two-sided paired Wilcoxon signed-rank,-275.3219909286499,3.54054012128439e-13,4.6027021576697065e-12,True
+calfwrapper_vs_base_low,robot,Low,balanced,base,two-sided paired Wilcoxon signed-rank,149.9115542793274,1.5495511998159835e-05,6.198204799263934e-05,True
+calfwrapper_above_both_low,robot,Low,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-275.3219909286499,0.9999999999998229,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,high,fallback,two-sided paired Wilcoxon signed-rank,-347.32417446136475,1.6837927151593467e-13,2.357309801223085e-12,True
+calfwrapper_vs_base_low,robot,Low,high,base,two-sided paired Wilcoxon signed-rank,77.90937074661255,0.01552513602440657,0.046575408073219714,True
+calfwrapper_above_both_low,robot,Low,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-347.32417446136475,0.9999999999999158,1.0,False
+calfwrapper_vs_fallback_low,robot,Low,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-395.99315614700316,6.957422823453746e-14,1.0436134235180619e-12,True
+calfwrapper_vs_base_low,robot,Low,almost_open,base,two-sided paired Wilcoxon signed-rank,29.24038906097412,0.07755810431516463,0.15511620863032927,False
+calfwrapper_above_both_low,robot,Low,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-395.99315614700316,0.9999999999999653,1.0,False
+calfwrapper_vs_fallback_mid,pendulum,Mid,conservative,fallback,two-sided paired Wilcoxon signed-rank,118.99848850861191,2.852392826724721e-06,3.7081106747421374e-05,True
+calfwrapper_vs_base_mid,pendulum,Mid,conservative,base,two-sided paired Wilcoxon signed-rank,448.76344385317526,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,pendulum,Mid,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,118.99848850861191,1.4261964133623605e-06,3.4228713920696654e-05,True
+calfwrapper_vs_fallback_mid,pendulum,Mid,guarded,fallback,two-sided paired Wilcoxon signed-rank,115.56478000223636,0.00022683149580969613,0.002041483462287265,True
+calfwrapper_vs_base_mid,pendulum,Mid,guarded,base,two-sided paired Wilcoxon signed-rank,445.32973534679974,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,pendulum,Mid,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,115.56478000223636,0.00011341574790484806,0.0026085622018115055,True
+calfwrapper_vs_fallback_mid,pendulum,Mid,moderate,fallback,two-sided paired Wilcoxon signed-rank,-13.965815703272819,0.2052165214640469,0.6156495643921407,False
+calfwrapper_vs_base_mid,pendulum,Mid,moderate,base,two-sided paired Wilcoxon signed-rank,315.79913964129054,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,pendulum,Mid,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-13.965815703272819,0.8973917392679766,1.0,False
+calfwrapper_vs_fallback_mid,pendulum,Mid,balanced,fallback,two-sided paired Wilcoxon signed-rank,-108.47818082034588,0.00015731731684201448,0.0015731731684201448,True
+calfwrapper_vs_base_mid,pendulum,Mid,balanced,base,two-sided paired Wilcoxon signed-rank,221.28677452421746,6.311606041551026e-18,1.1360890874791848e-16,True
+calfwrapper_above_both_mid,pendulum,Mid,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-108.47818082034588,0.999921341341579,1.0,False
+calfwrapper_vs_fallback_mid,pendulum,Mid,high,fallback,two-sided paired Wilcoxon signed-rank,-219.15954075992107,9.206945067252522e-11,1.5651806614329287e-09,True
+calfwrapper_vs_base_mid,pendulum,Mid,high,base,two-sided paired Wilcoxon signed-rank,110.60541458464228,3.374048120826996e-16,5.398476993323194e-15,True
+calfwrapper_above_both_mid,pendulum,Mid,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-219.15954075992107,0.9999999999539653,1.0,False
+calfwrapper_vs_fallback_mid,pendulum,Mid,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-301.0543047827482,2.8208032446580553e-14,5.077445840384499e-13,True
+calfwrapper_vs_base_mid,pendulum,Mid,almost_open,base,two-sided paired Wilcoxon signed-rank,28.71065056181513,8.199514013509029e-07,1.0659368217561738e-05,True
+calfwrapper_above_both_mid,pendulum,Mid,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-301.0543047827482,0.9999999999999859,1.0,False
+calfwrapper_vs_fallback_mid,cartpole,Mid,conservative,fallback,two-sided paired Wilcoxon signed-rank,3.067699851989746,0.8851770022716838,0.8864645728240017,False
+calfwrapper_vs_base_mid,cartpole,Mid,conservative,base,two-sided paired Wilcoxon signed-rank,124.03542418956756,1.0,1.0,False
+calfwrapper_above_both_mid,cartpole,Mid,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,3.067699851989746,0.5,1.0,False
+calfwrapper_vs_fallback_mid,cartpole,Mid,guarded,fallback,two-sided paired Wilcoxon signed-rank,298.52885120391846,0.0007815620423821004,0.006252496339056803,True
+calfwrapper_vs_base_mid,cartpole,Mid,guarded,base,two-sided paired Wilcoxon signed-rank,419.49657554149627,9.772026044186042e-07,1.1726431253023251e-05,True
+calfwrapper_above_both_mid,cartpole,Mid,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,298.52885120391846,0.0003907810211910502,0.008597182466203104,True
+calfwrapper_vs_fallback_mid,cartpole,Mid,moderate,fallback,two-sided paired Wilcoxon signed-rank,291.360883731842,0.0010249019434215784,0.007174313603951049,True
+calfwrapper_vs_base_mid,cartpole,Mid,moderate,base,two-sided paired Wilcoxon signed-rank,412.3286080694199,1.5953234709419534e-05,0.00017548558180361488,True
+calfwrapper_above_both_mid,cartpole,Mid,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,291.360883731842,0.0005124509717107892,0.010761470405926574,True
+calfwrapper_vs_fallback_mid,cartpole,Mid,balanced,fallback,two-sided paired Wilcoxon signed-rank,259.25190645217896,0.009062468723194324,0.045312343615971626,True
+calfwrapper_vs_base_mid,cartpole,Mid,balanced,base,two-sided paired Wilcoxon signed-rank,380.21963078975676,0.007627245069920197,0.053390715489441375,False
+calfwrapper_above_both_mid,cartpole,Mid,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,259.25190645217896,0.004531234361597162,0.09062468723194325,False
+calfwrapper_vs_fallback_mid,cartpole,Mid,high,fallback,two-sided paired Wilcoxon signed-rank,168.15059637069703,0.09677152330659382,0.38708609322637527,False
+calfwrapper_vs_base_mid,cartpole,Mid,high,base,two-sided paired Wilcoxon signed-rank,289.11832070827484,0.6623526798628128,1.0,False
+calfwrapper_above_both_mid,cartpole,Mid,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,168.15059637069703,0.3311763399314064,1.0,False
+calfwrapper_vs_fallback_mid,cartpole,Mid,almost_open,fallback,two-sided paired Wilcoxon signed-rank,101.0085710144043,0.44323228641200085,0.8864645728240017,False
+calfwrapper_vs_base_mid,cartpole,Mid,almost_open,base,two-sided paired Wilcoxon signed-rank,221.97629535198212,0.010524168093099797,0.06314500855859878,False
+calfwrapper_above_both_mid,cartpole,Mid,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,101.0085710144043,0.9947379159534501,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,conservative,fallback,two-sided paired Wilcoxon signed-rank,-164.36545471191405,3.63574062749329e-15,6.90790719223725e-14,True
+calfwrapper_vs_base_mid,auv,Mid,conservative,base,two-sided paired Wilcoxon signed-rank,2158.8325482177734,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,auv,Mid,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-164.36545471191405,0.9999999999999982,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,guarded,fallback,two-sided paired Wilcoxon signed-rank,-633.2615615844727,7.343095847008848e-17,1.4686191694017696e-15,True
+calfwrapper_vs_base_mid,auv,Mid,guarded,base,two-sided paired Wilcoxon signed-rank,1689.936441345215,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,auv,Mid,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-633.2615615844727,1.0,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,moderate,fallback,two-sided paired Wilcoxon signed-rank,-895.5568560791015,4.0161556854627e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_mid,auv,Mid,moderate,base,two-sided paired Wilcoxon signed-rank,1427.641146850586,5.649430306955948e-17,9.604031521825111e-16,True
+calfwrapper_above_both_mid,auv,Mid,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-895.5568560791015,1.0,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,balanced,fallback,two-sided paired Wilcoxon signed-rank,-983.5020245361328,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_mid,auv,Mid,balanced,base,two-sided paired Wilcoxon signed-rank,1339.6959783935547,4.2663227307182344e-18,9.351743628230182e-17,True
+calfwrapper_above_both_mid,auv,Mid,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-983.5020245361328,1.0,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,high,fallback,two-sided paired Wilcoxon signed-rank,-1506.298350830078,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_mid,auv,Mid,high,base,two-sided paired Wilcoxon signed-rank,816.8996520996094,1.5990843776221757e-13,2.3986265664332635e-12,True
+calfwrapper_above_both_mid,auv,Mid,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-1506.298350830078,1.0,1.0,False
+calfwrapper_vs_fallback_mid,auv,Mid,almost_open,fallback,two-sided paired Wilcoxon signed-rank,-2272.57673828125,3.896559845095909e-18,9.351743628230182e-17,True
+calfwrapper_vs_base_mid,auv,Mid,almost_open,base,two-sided paired Wilcoxon signed-rank,50.6212646484375,3.2715597182889192e-09,4.580183605604487e-08,True
+calfwrapper_above_both_mid,auv,Mid,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-2272.57673828125,1.0,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,conservative,fallback,two-sided paired Wilcoxon signed-rank,21.99785566329956,8.154142243566953e-06,9.784970692280345e-05,True
+calfwrapper_vs_base_mid,robot,Mid,conservative,base,two-sided paired Wilcoxon signed-rank,-10.225148372650146,0.0002677826563524901,0.0026778265635249007,True
+calfwrapper_above_both_mid,robot,Mid,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-10.225148372650146,0.9998661086718238,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,guarded,fallback,two-sided paired Wilcoxon signed-rank,22.540925102233885,0.00206487521136988,0.012389251268219279,True
+calfwrapper_vs_base_mid,robot,Mid,guarded,base,two-sided paired Wilcoxon signed-rank,-9.68207893371582,0.0007732484637995587,0.006959236174196028,True
+calfwrapper_above_both_mid,robot,Mid,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-9.68207893371582,0.9996133757681002,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,moderate,fallback,two-sided paired Wilcoxon signed-rank,13.24259298324585,4.751240332349647e-05,0.0005226364365584612,True
+calfwrapper_vs_base_mid,robot,Mid,moderate,base,two-sided paired Wilcoxon signed-rank,-18.980411052703857,0.011920070491387354,0.06314500855859878,False
+calfwrapper_above_both_mid,robot,Mid,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-18.980411052703857,0.9940399647543063,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,balanced,fallback,two-sided paired Wilcoxon signed-rank,21.961357231140138,1.4819472203436094e-06,2.0747261084810533e-05,True
+calfwrapper_vs_base_mid,robot,Mid,balanced,base,two-sided paired Wilcoxon signed-rank,-10.26164680480957,0.0009079567094561424,0.007263653675649139,True
+calfwrapper_above_both_mid,robot,Mid,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-10.26164680480957,0.999546021645272,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,high,fallback,two-sided paired Wilcoxon signed-rank,29.517592315673827,1.8288856923561652e-07,2.743328538534248e-06,True
+calfwrapper_vs_base_mid,robot,Mid,high,base,two-sided paired Wilcoxon signed-rank,-2.7054117202758787,0.011951793256375545,0.06314500855859878,False
+calfwrapper_above_both_mid,robot,Mid,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-2.7054117202758787,0.9940241033718122,1.0,False
+calfwrapper_vs_fallback_mid,robot,Mid,almost_open,fallback,two-sided paired Wilcoxon signed-rank,32.244885749816895,2.2613493018572627e-08,3.6181588829716203e-07,True
+calfwrapper_vs_base_mid,robot,Mid,almost_open,base,two-sided paired Wilcoxon signed-rank,0.0218817138671875,0.907540882973728,1.0,False
+calfwrapper_above_both_mid,robot,Mid,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,0.0218817138671875,0.5462295585131359,1.0,False
+calfwrapper_vs_fallback_high,pendulum,High,conservative,fallback,two-sided paired Wilcoxon signed-rank,158.3684445953369,6.374249129472376e-07,7.011674042419613e-06,True
+calfwrapper_vs_base_high,pendulum,High,conservative,base,two-sided paired Wilcoxon signed-rank,126.13501652195119,0.017183434164736427,0.17183434164736427,False
+calfwrapper_above_both_high,pendulum,High,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,126.13501652195119,0.008591717082368213,0.12028403915315498,False
+calfwrapper_vs_fallback_high,pendulum,High,guarded,fallback,two-sided paired Wilcoxon signed-rank,170.1864290235564,1.6441859537589435e-07,1.973023144510732e-06,True
+calfwrapper_vs_base_high,pendulum,High,guarded,base,two-sided paired Wilcoxon signed-rank,137.9530009501707,1.3229086269941213e-10,2.116653803190594e-09,True
+calfwrapper_above_both_high,pendulum,High,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,137.9530009501707,8.220929768794717e-08,1.6441859537589435e-06,True
+calfwrapper_vs_fallback_high,pendulum,High,moderate,fallback,two-sided paired Wilcoxon signed-rank,157.7933043531701,2.6861239262363173e-06,2.6861239262363173e-05,True
+calfwrapper_vs_base_high,pendulum,High,moderate,base,two-sided paired Wilcoxon signed-rank,125.55987627978436,3.725407650063557e-13,6.3331930051080476e-12,True
+calfwrapper_above_both_high,pendulum,High,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,125.55987627978436,1.3430619631181586e-06,2.5518177299245013e-05,True
+calfwrapper_vs_fallback_high,pendulum,High,balanced,fallback,two-sided paired Wilcoxon signed-rank,153.75459088366478,5.411157143009423e-06,4.870041428708481e-05,True
+calfwrapper_vs_base_high,pendulum,High,balanced,base,two-sided paired Wilcoxon signed-rank,121.52116281027905,1.167230343096855e-15,2.4511837205033957e-14,True
+calfwrapper_above_both_high,pendulum,High,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,121.52116281027905,2.7055785715047116e-06,4.697229285754031e-05,True
+calfwrapper_vs_fallback_high,pendulum,High,high,fallback,two-sided paired Wilcoxon signed-rank,98.95753607284277,0.004713287450171473,0.018853149800685892,True
+calfwrapper_vs_base_high,pendulum,High,high,base,two-sided paired Wilcoxon signed-rank,66.72410799945705,6.348428415673146e-17,1.4601385356048236e-15,True
+calfwrapper_above_both_high,pendulum,High,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,66.72410799945705,0.0023566437250857365,0.037706299601371784,True
+calfwrapper_vs_fallback_high,pendulum,High,almost_open,fallback,two-sided paired Wilcoxon signed-rank,67.54524374883621,0.019811338217251184,0.03962267643450237,True
+calfwrapper_vs_base_high,pendulum,High,almost_open,base,two-sided paired Wilcoxon signed-rank,35.31181567545049,3.1974252113338073e-13,5.755365380400853e-12,True
+calfwrapper_above_both_high,pendulum,High,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,35.31181567545049,0.009905669108625592,0.12877369841213268,False
+calfwrapper_vs_fallback_high,cartpole,High,conservative,fallback,two-sided paired Wilcoxon signed-rank,97.40267539978028,0.16799823134712144,0.16799823134712144,False
+calfwrapper_vs_base_high,cartpole,High,conservative,base,two-sided paired Wilcoxon signed-rank,-40.07252259254456,0.0054666602746094375,0.06559992329531325,False
+calfwrapper_above_both_high,cartpole,High,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-40.07252259254456,0.9972666698626953,1.0,False
+calfwrapper_vs_fallback_high,cartpole,High,guarded,fallback,two-sided paired Wilcoxon signed-rank,281.30062854766845,0.0022125636913517266,0.011062818456758633,True
+calfwrapper_vs_base_high,cartpole,High,guarded,base,two-sided paired Wilcoxon signed-rank,143.82543055534362,0.7727196720119712,1.0,False
+calfwrapper_above_both_high,cartpole,High,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,143.82543055534362,0.3863598360059856,1.0,False
+calfwrapper_vs_fallback_high,cartpole,High,moderate,fallback,two-sided paired Wilcoxon signed-rank,351.7757074356079,7.253099314369716e-05,0.0005802479451495773,True
+calfwrapper_vs_base_high,cartpole,High,moderate,base,two-sided paired Wilcoxon signed-rank,214.3005094432831,0.010115174724622072,0.11126692197084279,False
+calfwrapper_above_both_high,cartpole,High,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,214.3005094432831,0.005057587362311036,0.07586381043466554,False
+calfwrapper_vs_fallback_high,cartpole,High,balanced,fallback,two-sided paired Wilcoxon signed-rank,302.4573693084717,0.0007913433087949734,0.004748059852769841,True
+calfwrapper_vs_base_high,cartpole,High,balanced,base,two-sided paired Wilcoxon signed-rank,164.98217131614686,0.3426319759495927,1.0,False
+calfwrapper_above_both_high,cartpole,High,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,164.98217131614686,0.17131598797479636,1.0,False
+calfwrapper_vs_fallback_high,cartpole,High,high,fallback,two-sided paired Wilcoxon signed-rank,322.51967864990235,0.00043578615217769115,0.003050503065243838,True
+calfwrapper_vs_base_high,cartpole,High,high,base,two-sided paired Wilcoxon signed-rank,185.0444806575775,0.6976233342391592,1.0,False
+calfwrapper_above_both_high,cartpole,High,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,185.0444806575775,0.3488116671195796,1.0,False
+calfwrapper_vs_fallback_high,cartpole,High,almost_open,fallback,two-sided paired Wilcoxon signed-rank,244.15321029663085,0.007627245069920197,0.02288173520976059,True
+calfwrapper_vs_base_high,cartpole,High,almost_open,base,two-sided paired Wilcoxon signed-rank,106.67801230430604,0.0006811279931415198,0.008854663910839757,True
+calfwrapper_above_both_high,cartpole,High,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,106.67801230430604,0.9996594360034292,1.0,False
+calfwrapper_vs_fallback_high,auv,High,conservative,fallback,two-sided paired Wilcoxon signed-rank,100.34124877929688,4.4569648652534925e-10,5.79405432482954e-09,True
+calfwrapper_vs_base_high,auv,High,conservative,base,two-sided paired Wilcoxon signed-rank,-20.644248962402344,0.8392435483441993,1.0,False
+calfwrapper_above_both_high,auv,High,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-20.644248962402344,0.41962177417209967,1.0,False
+calfwrapper_vs_fallback_high,auv,High,guarded,fallback,two-sided paired Wilcoxon signed-rank,161.9404411315918,1.1147719595548441e-17,2.675452702931626e-16,True
+calfwrapper_vs_base_high,auv,High,guarded,base,two-sided paired Wilcoxon signed-rank,40.95494338989258,2.964263914228315e-17,7.114233394147956e-16,True
+calfwrapper_above_both_high,auv,High,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,40.95494338989258,1.4821319571141574e-17,3.557116697073978e-16,True
+calfwrapper_vs_fallback_high,auv,High,moderate,fallback,two-sided paired Wilcoxon signed-rank,141.94342041015625,5.816713162471362e-17,1.1051755008695588e-15,True
+calfwrapper_vs_base_high,auv,High,moderate,base,two-sided paired Wilcoxon signed-rank,20.95792266845703,1.470748930574634e-16,3.235647647264195e-15,True
+calfwrapper_above_both_high,auv,High,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,20.95792266845703,7.35374465287317e-17,1.6913612701608291e-15,True
+calfwrapper_vs_fallback_high,auv,High,balanced,fallback,two-sided paired Wilcoxon signed-rank,139.32263061523437,1.2370784421819017e-16,2.1030333517092328e-15,True
+calfwrapper_vs_base_high,auv,High,balanced,base,two-sided paired Wilcoxon signed-rank,18.337132873535158,2.6124792772213226e-15,5.224958554442645e-14,True
+calfwrapper_above_both_high,auv,High,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,18.337132873535158,1.3062396386106613e-15,2.873727204943455e-14,True
+calfwrapper_vs_fallback_high,auv,High,high,fallback,two-sided paired Wilcoxon signed-rank,137.89739837646485,1.5579198910001613e-16,2.492671825600258e-15,True
+calfwrapper_vs_base_high,auv,High,high,base,two-sided paired Wilcoxon signed-rank,16.911900634765626,7.52665218735253e-10,1.1289978281028795e-08,True
+calfwrapper_above_both_high,auv,High,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,16.911900634765626,3.763326093676265e-10,7.902984796720156e-09,True
+calfwrapper_vs_fallback_high,auv,High,almost_open,fallback,two-sided paired Wilcoxon signed-rank,123.64659042358399,3.257070457184411e-15,4.885605685776616e-14,True
+calfwrapper_vs_base_high,auv,High,almost_open,base,two-sided paired Wilcoxon signed-rank,2.6610926818847656,5.2191436508378124e-06,7.306801111172937e-05,True
+calfwrapper_above_both_high,auv,High,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,2.6610926818847656,2.6095718254189062e-06,4.697229285754031e-05,True
+calfwrapper_vs_fallback_high,robot,High,conservative,fallback,two-sided paired Wilcoxon signed-rank,53.53822212219238,8.936725189747308e-15,1.251141526564623e-13,True
+calfwrapper_vs_base_high,robot,High,conservative,base,two-sided paired Wilcoxon signed-rank,-10.897851638793945,4.816144054657832e-14,9.15067370384988e-13,True
+calfwrapper_above_both_high,robot,High,conservative,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-10.897851638793945,0.9999999999999759,1.0,False
+calfwrapper_vs_fallback_high,robot,High,guarded,fallback,two-sided paired Wilcoxon signed-rank,63.494776096344,8.998385137455785e-17,1.6197093247420413e-15,True
+calfwrapper_vs_base_high,robot,High,guarded,base,two-sided paired Wilcoxon signed-rank,-0.941297664642334,0.07392246519670155,0.5174572563769109,False
+calfwrapper_above_both_high,robot,High,guarded,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-0.941297664642334,0.9630387674016492,1.0,False
+calfwrapper_vs_fallback_high,robot,High,moderate,fallback,two-sided paired Wilcoxon signed-rank,64.42357685089111,4.342298919012428e-17,9.987287513728584e-16,True
+calfwrapper_vs_base_high,robot,High,moderate,base,two-sided paired Wilcoxon signed-rank,-0.012496910095214843,0.022541258667558565,0.2028713280080271,False
+calfwrapper_above_both_high,robot,High,moderate,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-0.012496910095214843,0.9887293706662207,1.0,False
+calfwrapper_vs_fallback_high,robot,High,balanced,fallback,two-sided paired Wilcoxon signed-rank,64.43227741241455,4.342298919012428e-17,9.987287513728584e-16,True
+calfwrapper_vs_base_high,robot,High,balanced,base,two-sided paired Wilcoxon signed-rank,-0.003796348571777344,0.06403929052055472,0.5123143241644378,False
+calfwrapper_above_both_high,robot,High,balanced,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-0.003796348571777344,0.9679803547397227,1.0,False
+calfwrapper_vs_fallback_high,robot,High,high,fallback,two-sided paired Wilcoxon signed-rank,64.17153469085693,4.342298919012428e-17,9.987287513728584e-16,True
+calfwrapper_vs_base_high,robot,High,high,base,two-sided paired Wilcoxon signed-rank,-0.26453907012939454,0.24112136827741826,1.0,False
+calfwrapper_above_both_high,robot,High,high,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,-0.26453907012939454,0.8794393158612909,1.0,False
+calfwrapper_vs_fallback_high,robot,High,almost_open,fallback,two-sided paired Wilcoxon signed-rank,64.43607376098633,4.342298919012428e-17,9.987287513728584e-16,True
+calfwrapper_vs_base_high,robot,High,almost_open,base,two-sided paired Wilcoxon signed-rank,0.0,1.0,1.0,False
+calfwrapper_above_both_high,robot,High,almost_open,base and fallback,intersection-union of two one-sided paired Wilcoxon tests,0.0,1.0,1.0,False

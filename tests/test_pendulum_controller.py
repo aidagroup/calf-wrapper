@@ -1,7 +1,8 @@
-import numpy as np
 import gymnasium as gym
+import numpy as np
 import pytest
 from stable_baselines3.common.env_util import make_vec_env
+
 from src.controllers.pendulum import EnergyBasedStabilizingPolicy
 
 

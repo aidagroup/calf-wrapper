@@ -1,117 +1,118 @@
+from typing import Any
+
 import numpy as np
-import gymnasium as gym
-import pytest
-from stable_baselines3.common.env_util import make_vec_env
-from src.calf_wrapper import CALFWrapper
-from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
-from stable_baselines3 import PPO
+
+from calfwrapper.wrapper import CALFWrapper
 
 
-@pytest.fixture
-def base_policy():
-    model = PPO("MlpPolicy", "CartpoleSwingupEnvLong-v0", device="cpu", seed=42)
-    return model
+class FakeEnvironment:
+    num_envs = 2
+
+    def __init__(self) -> None:
+        self.actions: list[np.ndarray] = []
+
+    def reset(self) -> np.ndarray:
+        return np.array([[1.0], [2.0]])
+
+    def step(self, actions: np.ndarray) -> tuple[Any, ...]:
+        self.actions.append(np.copy(actions))
+        states = np.array([[2.0], [3.0]])
+        return states, np.zeros(2), np.zeros(2, dtype=bool), [{}, {}]
+
+    def close(self) -> None:
+        pass
 
 
-@pytest.fixture
-def stabilizing_policy():
-    return CartpoleEnergyBasedStabilizingPolicy(
-        env_id="CartpoleSwingupEnvLong-v0",
-        pd_coefs=[70, 10.0, 20.0, 10.0],
-        gain=0.5,
-        gain_pos_vel=0.5,
-        action_min=-10.0,
-        action_max=10.0,
+class FakeFallbackPolicy:
+    def get_action(self, states: np.ndarray) -> np.ndarray:
+        return np.full_like(states, -1.0)
+
+
+class FakeBasePolicy:
+    pass
+
+
+def make_wrapper(
+    monkeypatch,
+    *,
+    values: np.ndarray,
+    nu: float = 1.0,
+    p_relax: float = 0.0,
+    lambda_: float = 0.0,
+    fallback_only=lambda states: np.zeros(len(states), dtype=bool),
+    critic_upper_bound: float = np.inf,
+    critic_transform=None,
+) -> CALFWrapper:
+    monkeypatch.setattr(
+        "calfwrapper.wrapper.critic_values",
+        lambda base_policy, states: np.copy(values),
     )
-
-
-def test_single_env_relaxprob_comparison(base_policy, stabilizing_policy):
-    # Create two environments with different relax probabilities
-    env = gym.make("CartpoleSwingupEnvLong-v0")
-    vec_env = make_vec_env("CartpoleSwingupEnvLong-v0", n_envs=1, seed=42)
-
-    # Wrap environments with CALF
-    wrapped_env = CALFWrapper(
-        env,
-        model=base_policy,
-        stabilizing_policy=stabilizing_policy,
-        relaxprob_init=0.5,
-        relaxprob_factor=1.0,
+    return CALFWrapper(
+        FakeEnvironment(),
+        FakeBasePolicy(),
+        FakeFallbackPolicy(),
+        nu=nu,
+        p_relax=p_relax,
+        lambda_=lambda_,
         seed=42,
+        critic_upper_bound=critic_upper_bound,
+        fallback_only=fallback_only,
+        critic_transform=critic_transform,
     )
-    obs = wrapped_env.reset(seed=42)
-    vec_wrapped_env = CALFWrapper(
-        vec_env,
-        model=base_policy,
-        stabilizing_policy=stabilizing_policy,
-        relaxprob_init=0.5,
-        relaxprob_factor=1.0,
-        seed=42,
+
+
+def test_fallback_only_states_disable_both_base_policy_conditions(monkeypatch) -> None:
+    environment = make_wrapper(
+        monkeypatch,
+        values=np.array([1.0, 2.0]),
+        p_relax=1.0,
+        lambda_=1.0,
+        fallback_only=lambda states: np.array([True, False]),
     )
-    vec_obs = vec_wrapped_env.reset()
-    assert np.allclose(obs, vec_obs[0])
-    # Run both environments for several steps
-    decay_happended_n = 0
-    base_action_applied_n = 0
-    for _ in range(999):
-        action = base_policy.predict(obs, deterministic=False)[
-            0
-        ]  # Same action for both
+    environment.reset()
+    _, _, _, information = environment.step(np.array([[10.0], [20.0]]))
 
-        next_obs, reward, terminated, truncated, info = wrapped_env.step(action)
-        vec_next_obs, vec_reward, vec_is_done, vec_info = vec_wrapped_env.step(
-            action.reshape(1, -1)
-        )
-
-        assert np.allclose(next_obs, vec_next_obs[0])
-        assert (
-            info["calf.base_action_applied"] == vec_info[0]["calf.base_action_applied"]
-        )
-        assert info["calf.relaxprob"] == vec_info[0]["calf.relaxprob"]
-        assert info["calf.decay_happened"] == vec_info[0]["calf.decay_happened"]
-        if info["calf.decay_happened"]:
-            decay_happended_n += 1
-        if info["calf.base_action_applied"]:
-            base_action_applied_n += 1
-        obs = next_obs
-
-    assert decay_happended_n > 0
-    assert base_action_applied_n > 0
+    np.testing.assert_allclose(environment.environment.actions[-1], [[-1.0], [20.0]])
+    assert information[0]["calfwrapper.fallback_only"]
+    assert not information[0]["calfwrapper.base_policy_selected"]
+    assert information[1]["calfwrapper.random_acceptance_condition"]
 
 
-def test_calf_wrapper_vec_env(base_policy, stabilizing_policy):
-    env = CALFWrapper(
-        make_vec_env("CartpoleSwingupEnvLong-v0", n_envs=10, seed=42),
-        model=base_policy,
-        stabilizing_policy=stabilizing_policy,
-        relaxprob_init=0.5,
-        relaxprob_factor=1.0,
-        seed=42,
+def test_critic_condition_updates_the_reference_value(monkeypatch) -> None:
+    values = np.array([1.0, 2.0])
+    environment = make_wrapper(monkeypatch, values=values, nu=0.5)
+    environment.reset()
+    values[:] = [1.5, 2.4]
+    _, _, _, information = environment.step(np.array([[10.0], [20.0]]))
+
+    np.testing.assert_allclose(environment.reference_value[:, 0], [1.5, 2.0])
+    np.testing.assert_allclose(environment.environment.actions[-1], [[10.0], [-1.0]])
+    assert information[0]["calfwrapper.critic_condition"]
+    assert not information[1]["calfwrapper.critic_condition"]
+
+
+def test_random_acceptance_probability_decays_after_each_step(monkeypatch) -> None:
+    environment = make_wrapper(
+        monkeypatch,
+        values=np.array([1.0, 2.0]),
+        p_relax=1.0,
+        lambda_=0.5,
     )
-    obs = env.reset()
-    values, best_values = [], []
-    for _ in range(999):
-        action = base_policy.predict(obs, deterministic=False)[
-            0
-        ]  # Same action for both
-        values.append(env.value(obs))
-        alternative_action = stabilizing_policy.get_action(obs)
-        next_obs, reward, is_done, infos = env.step(action)
+    environment.reset()
+    environment.step(np.array([[10.0], [20.0]]))
 
-        for i, info in enumerate(infos):
-            if info["calf.base_action_applied"]:
-                assert np.allclose(action[i, :], info["calf.action"])
-            else:
-                assert np.allclose(alternative_action[i, :], info["calf.action"])
-        best_values.append(np.copy(env.best_value))
-        obs = next_obs
+    assert environment.p_relax == 0.5
 
-    values = np.hstack(values)
-    cur_best_value = np.copy(values[:, 0])
-    for i in range(values.shape[1]):
-        cur_best_value = np.where(
-            values[:, i] - cur_best_value >= env.calf_change_rate,
-            values[:, i],
-            cur_best_value,
-        )
-        assert np.allclose(cur_best_value, best_values[i].reshape(-1))
+
+def test_critic_transform_is_applied_before_upper_clipping(monkeypatch) -> None:
+    environment = make_wrapper(
+        monkeypatch,
+        values=np.array([5.0, -2.0]),
+        critic_upper_bound=3.0,
+        critic_transform=lambda values: values + 1.0,
+    )
+
+    np.testing.assert_allclose(
+        environment.critic_value(np.zeros((2, 1)))[:, 0],
+        [3.0, -1.0],
+    )

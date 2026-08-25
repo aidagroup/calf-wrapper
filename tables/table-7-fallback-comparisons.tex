@@ -1,0 +1,23 @@
+\begin{table}[t]
+  \centering
+  \caption{Paired return comparisons with the fallback policy.}
+  \label{tab:comparisons_with_fallback}
+  \scriptsize
+  \begin{tabularx}{\columnwidth}{llcX}
+    \toprule
+    Checkpoint & Statistical result & Count & Environment and operating modes \\
+    \midrule
+    Low & Significant; mean paired difference positive & 1/24 & Pendulum: Conservative. \\
+    Low & Significant; mean paired difference negative & 15/24 & Pendulum: Moderate, Balanced, High, Almost Open; AUV: Conservative, Guarded, Moderate, Balanced, High, Almost Open; Robot: Guarded, Moderate, Balanced, High, Almost Open. \\
+    Low & No significant difference & 8/24 & Pendulum: Guarded; CartPole: Conservative, Guarded, Moderate, Balanced, High, Almost Open; Robot: Conservative. \\
+    \midrule
+    Mid & Significant; mean paired difference positive & 11/24 & Pendulum: Conservative, Guarded; CartPole: Guarded, Moderate, Balanced; Robot: Conservative, Guarded, Moderate, Balanced, High, Almost Open. \\
+    Mid & Significant; mean paired difference negative & 9/24 & Pendulum: Balanced, High, Almost Open; AUV: Conservative, Guarded, Moderate, Balanced, High, Almost Open. \\
+    Mid & No significant difference & 4/24 & Pendulum: Moderate; CartPole: Conservative, High, Almost Open. \\
+    \midrule
+    High & Significant; mean paired difference positive & 23/24 & Pendulum: Conservative, Guarded, Moderate, Balanced, High, Almost Open; CartPole: Guarded, Moderate, Balanced, High, Almost Open; AUV: Conservative, Guarded, Moderate, Balanced, High, Almost Open; Robot: Conservative, Guarded, Moderate, Balanced, High, Almost Open. \\
+    High & Significant; mean paired difference negative & 0/24 & None. \\
+    High & No significant difference & 1/24 & CartPole: Conservative. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

@@ -1,5 +1,6 @@
-import numpy as np
 import gymnasium as gym
+import numpy as np
+
 from src.controllers.controller import Controller
 
 
@@ -42,14 +43,11 @@ class EnergyBasedStabilizingPolicy(Controller):
             + 1 / 2 * self.pendulum_moment_inertia * angle_vel**2
         )
         energy_control_action = -self.gain * np.sign(angle_vel * energy_total)
-        pd_control_action = (
-            -self.pd_coeffs[0] * sin_angle - self.pd_coeffs[1] * angle_vel
-        )
+        pd_control_action = -self.pd_coeffs[0] * sin_angle - self.pd_coeffs[1] * angle_vel
 
         action = np.clip(
             np.where(
-                (cos_angle <= self.switch_loc)
-                | (np.abs(angle_vel) > self.switch_vel_loc),
+                (cos_angle <= self.switch_loc) | (np.abs(angle_vel) > self.switch_vel_loc),
                 energy_control_action,
                 pd_control_action,
             ),
