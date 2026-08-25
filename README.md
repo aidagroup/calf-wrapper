@@ -87,8 +87,3 @@ tables/                 Reproduced article tables
 tests/                  Automated validation
 outputs/                Training and evaluation outputs
 ```
-
-The Pendulum environment is provided by Gymnasium. Its fallback policy is in
-`calfwrapper/fallback/pendulum.py`, and its checkpoints are under
-`artifacts/checkpoints/base/pendulum/` and
-`artifacts/checkpoints/lagrangian/pendulum/`.
