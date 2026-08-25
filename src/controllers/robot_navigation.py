@@ -17,9 +17,7 @@ class RobotNavigationConstSpeedGoalController(Controller):
         config = RobotNavigationConstSpeedConfig()
         self.turn_gain = float(turn_gain)
         self.max_turn_rate = (
-            float(config.max_angular_velocity)
-            if max_turn_rate is None
-            else float(max_turn_rate)
+            float(config.max_angular_velocity) if max_turn_rate is None else float(max_turn_rate)
         )
 
     def get_action(self, observation: np.ndarray) -> np.ndarray:

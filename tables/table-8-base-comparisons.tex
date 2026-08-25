@@ -1,0 +1,23 @@
+\begin{table}[t]
+  \centering
+  \caption{Paired return comparisons with the base policy.}
+  \label{tab:comparisons_with_base}
+  \scriptsize
+  \begin{tabularx}{\columnwidth}{llcX}
+    \toprule
+    Checkpoint & Statistical result & Count & Environment and operating modes \\
+    \midrule
+    Low & Significant; mean paired difference positive & 22/24 & Pendulum: Conservative, Guarded, Moderate, Balanced, High, Almost Open; CartPole: Conservative, Guarded, Moderate, Balanced, High, Almost Open; AUV: Conservative, Guarded, Moderate, Balanced, High; Robot: Conservative, Guarded, Moderate, Balanced, High. \\
+    Low & Significant; mean paired difference negative & 0/24 & None. \\
+    Low & No significant difference & 2/24 & AUV: Almost Open; Robot: Almost Open. \\
+    \midrule
+    Mid & Significant; mean paired difference positive & 14/24 & Pendulum: Conservative, Guarded, Moderate, Balanced, High, Almost Open; CartPole: Guarded, Moderate; AUV: Conservative, Guarded, Moderate, Balanced, High, Almost Open. \\
+    Mid & Significant; mean paired difference negative & 3/24 & Robot: Conservative, Guarded, Balanced. \\
+    Mid & No significant difference & 7/24 & CartPole: Conservative, Balanced, High, Almost Open; Robot: Moderate, High, Almost Open. \\
+    \midrule
+    High & Significant; mean paired difference positive & 11/24 & Pendulum: Guarded, Moderate, Balanced, High, Almost Open; CartPole: Almost Open; AUV: Guarded, Moderate, Balanced, High, Almost Open. \\
+    High & Significant; mean paired difference negative & 1/24 & Robot: Conservative. \\
+    High & No significant difference & 12/24 & Pendulum: Conservative; CartPole: Conservative, Guarded, Moderate, Balanced, High; AUV: Conservative; Robot: Guarded, Moderate, Balanced, High, Almost Open. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

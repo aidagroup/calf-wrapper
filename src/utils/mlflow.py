@@ -1,24 +1,23 @@
 import dataclasses
 import functools
 import importlib.metadata
-import mlflow
-import numpy as np
 import os
 import platform
 import socket
 import subprocess
 import sys
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any
 
-from typing import Dict, Any, Tuple, Union, Optional, List
+import mlflow
+import numpy as np
 from stable_baselines3.common.logger import (
+    INFO,
     HumanOutputFormat,
     KVWriter,
     Logger,
-    configure,
-    INFO,
 )
-from collections import defaultdict
-from dataclasses import dataclass
 
 
 @dataclass
@@ -29,7 +28,7 @@ class MlflowConfig:
     experiment_name: str
     """MLflow experiment name"""
 
-    run_name: Optional[str] = None
+    run_name: str | None = None
     """MLflow run name"""
 
 
@@ -38,36 +37,30 @@ class MLflowOutputFormat(KVWriter):
 
     def write(
         self,
-        key_values: Dict[str, Any],
-        key_excluded: Dict[str, Union[str, Tuple[str, ...]]],
+        key_values: dict[str, Any],
+        key_excluded: dict[str, str | tuple[str, ...]],
         step: int = 0,
     ) -> None:
 
         for (key, value), (_, excluded) in zip(
-            sorted(key_values.items()), sorted(key_excluded.items())
+            sorted(key_values.items()), sorted(key_excluded.items()), strict=True
         ):
-
             if excluded is not None and "mlflow" in excluded:
                 continue
 
-            if isinstance(value, np.ScalarType):
-                if not isinstance(value, str):
-                    mlflow.log_metric(key, value, step)
+            if isinstance(value, np.ScalarType) and not isinstance(value, str):
+                mlflow.log_metric(key, value, step)
 
 
 class SilentLogger(Logger):
     def __init__(
         self,
-        folder: Optional[str] = None,
-        output_formats: Optional[List[KVWriter]] = None,
+        folder: str | None = None,
+        output_formats: list[KVWriter] | None = None,
     ):
-        self.name_to_value = defaultdict(
-            float
-        )  # Preserve the original Logger attributes
+        self.name_to_value = defaultdict(float)  # Preserve the original Logger attributes
         self.name_to_count = defaultdict(int)
-        self.name_to_excluded = defaultdict(
-            lambda: None
-        )  # Use a dictionary for exclusions
+        self.name_to_excluded = defaultdict(lambda: None)  # Use a dictionary for exclusions
         self.level = INFO
         self.folder = folder
         self.output_formats = output_formats or []
@@ -86,14 +79,12 @@ def create_mlflow_logger():
 
 def _git_value(*args: str) -> str:
     try:
-        return subprocess.check_output(
-            ["git", *args], stderr=subprocess.DEVNULL, text=True
-        ).strip()
+        return subprocess.check_output(["git", *args], stderr=subprocess.DEVNULL, text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
 
-def _flatten(value: Any, prefix: str = "") -> Dict[str, Any]:
+def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     if dataclasses.is_dataclass(value):
         value = dataclasses.asdict(value)
     if isinstance(value, dict):
@@ -112,7 +103,7 @@ def _flatten(value: Any, prefix: str = "") -> Dict[str, Any]:
     return {prefix: str(value)}
 
 
-def reproducibility_tags() -> Dict[str, str]:
+def reproducibility_tags() -> dict[str, str]:
     status = _git_value("status", "--porcelain")
     packages = ("gymnasium", "mlflow", "numpy", "stable-baselines3", "torch")
     tags = {

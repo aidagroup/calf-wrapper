@@ -1,9 +1,0 @@
-{
-  "experiment_prefix": "calf-wrapper/reproduction",
-  "tracking_uri": "http://192.168.1.5:5001",
-  "selected_run_policy": "latest completed run per MLflow run name",
-  "reference_only_methods": {
-    "residual": "Copied from the archived plotting JSON. CALF-Wrapper does not contain the Residual RL implementation or checkpoints."
-  }
-}
-

@@ -1,5 +1,6 @@
 import gymnasium as gym
 import numpy as np
+
 from src.controllers.controller import Controller
 
 
@@ -31,10 +32,7 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
         self.blend_width = blend_width
         if velocity_brake_threshold is not None and velocity_brake_threshold <= 0:
             raise ValueError("velocity_brake_threshold must be positive")
-        if (
-            velocity_brake_position_threshold is not None
-            and velocity_brake_position_threshold < 0
-        ):
+        if velocity_brake_position_threshold is not None and velocity_brake_position_threshold < 0:
             raise ValueError("velocity_brake_position_threshold must be nonnegative")
         self.velocity_brake_threshold = velocity_brake_threshold
         self.velocity_brake_position_threshold = velocity_brake_position_threshold
@@ -67,7 +65,7 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
             angle_vel = observation[:, np.newaxis, 4]
 
         energy = (
-            0.5 * self.moment_of_inertia * angle_vel**2
+            0.5 * self.moment_of_inertia * angle_vel** 2
             + self.polemass_length * self.gravconst * (cos_angle - 1)
         )
         swing_position_reference = self.swing_position_reference_gain * sin_angle
@@ -92,24 +90,19 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
         )
         if self.blend_width > 0:
             blend = np.clip(
-                (cos_angle - (self.switch_loc - self.blend_width))
-                / (2 * self.blend_width),
+                (cos_angle - (self.switch_loc - self.blend_width)) / (2 * self.blend_width),
                 0.0,
                 1.0,
             )
             blend = blend**2 * (3 - 2 * blend)
             action = (1 - blend) * energy_based_action + blend * pd_action
         else:
-            action = np.where(
-                cos_angle > self.switch_loc, pd_action, energy_based_action
-            )
+            action = np.where(cos_angle > self.switch_loc, pd_action, energy_based_action)
         if self.velocity_brake_threshold is not None:
             braking_action = np.where(pos_vel > 0, self.action_min, self.action_max)
             braking_required = np.abs(pos_vel) > self.velocity_brake_threshold
             if self.velocity_brake_position_threshold is not None:
-                braking_required &= (
-                    np.abs(pos) > self.velocity_brake_position_threshold
-                )
+                braking_required &= np.abs(pos) > self.velocity_brake_position_threshold
             action = np.where(
                 braking_required,
                 braking_action,

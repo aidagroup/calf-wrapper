@@ -23,8 +23,7 @@ def goal_reaching_mask(env_id: str, observations: np.ndarray) -> np.ndarray:
 
     if env_id == "Pendulum-v1":
         return np.all(
-            np.abs(latest_obs - np.array([[1.0, 0.0, 0.0]]))
-            < np.array([[0.05, 0.05, 0.3]]),
+            np.abs(latest_obs - np.array([[1.0, 0.0, 0.0]])) < np.array([[0.05, 0.05, 0.3]]),
             axis=1,
         )
     if env_id == "CartpoleSwingupEnvLong-v0":
@@ -34,17 +33,13 @@ def goal_reaching_mask(env_id: str, observations: np.ndarray) -> np.ndarray:
             axis=1,
         )
     if env_id == "UnderwaterDrone-v0":
-        return (latest_obs[:, 1] >= TOP_Y) & (
-            np.abs(latest_obs[:, 0]) <= HOLE_WIDTH / 2.0
-        )
+        return (latest_obs[:, 1] >= TOP_Y) & (np.abs(latest_obs[:, 0]) <= HOLE_WIDTH / 2.0)
     if env_id == "RobotNavigationConstSpeedCatch-v0":
         return np.linalg.norm(latest_obs[:, 0:2] - latest_obs[:, 4:6], axis=1) <= 0.05
     raise ValueError(f"Unknown environment: {env_id}")
 
 
-def goal_neighborhood_mask(
-    env_id: str, observations: np.ndarray, distance: float
-) -> np.ndarray:
+def goal_neighborhood_mask(env_id: str, observations: np.ndarray, distance: float) -> np.ndarray:
     """Return whether each observation is at most ``distance`` from the goal set."""
 
     if distance < 0.0:
@@ -58,9 +53,7 @@ def goal_neighborhood_mask(
         return np.hypot(horizontal, vertical) <= distance
     if distance == 0.0:
         return goal_reaching_mask(env_id, latest_obs)
-    raise ValueError(
-        f"a positive goal-neighborhood distance is not configured for {env_id}"
-    )
+    raise ValueError(f"a positive goal-neighborhood distance is not configured for {env_id}")
 
 
 def observation_reached_goal(env_id: str, observation: np.ndarray) -> bool:

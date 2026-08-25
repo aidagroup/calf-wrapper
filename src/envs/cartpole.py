@@ -1,20 +1,10 @@
 # Modified from gymnasium.envs.classic_control.cartpole
 
-from gymnasium.envs.classic_control.cartpole import CartPoleEnv
-from gymnasium import register
-import numpy as np
+import math
+
 import gymnasium as gym
-from typing import Optional
+import numpy as np
 from gymnasium import spaces
-import math
-import math
-from typing import Optional, Tuple, Union
-
-import numpy as np
-
-import gymnasium as gym
-from gymnasium import logger, spaces
-from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
 
@@ -22,7 +12,7 @@ def angle_normalize(x):
     return ((x + np.pi) % (2 * np.pi)) - np.pi
 
 
-class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
+class CartPoleSwingupEnv(gym.Env[np.ndarray, int | np.ndarray]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "render_fps": 50,
@@ -30,11 +20,11 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
     def __init__(
         self,
-        render_mode: Optional[str] = None,
-        seed: Optional[int] = None,
+        render_mode: str | None = None,
+        seed: int | None = None,
         terminate_on_out_of_bounds: bool = True,
         saturate_state_on_out_of_bounds: bool = False,
-        reward_position_clip: Optional[float] = None,
+        reward_position_clip: float | None = None,
         position_termination_threshold: float = 5.0,
         velocity_termination_threshold: float = 8.0,
         angular_velocity_termination_threshold: float = 10.0,
@@ -80,9 +70,7 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             dtype=np.float32,
         )
         self.force_mag = 10.0
-        self.action_space = spaces.Box(
-            -self.force_mag, self.force_mag, dtype=np.float32
-        )
+        self.action_space = spaces.Box(-self.force_mag, self.force_mag, dtype=np.float32)
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render_mode
@@ -91,9 +79,7 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.reward_position_clip = reward_position_clip
         self.position_termination_threshold = position_termination_threshold
         self.velocity_termination_threshold = velocity_termination_threshold
-        self.angular_velocity_termination_threshold = (
-            angular_velocity_termination_threshold
-        )
+        self.angular_velocity_termination_threshold = angular_velocity_termination_threshold
 
         self.screen_width = 600
         self.screen_height = 400
@@ -113,9 +99,7 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         # For the interested reader:
         # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + self.polemass_length * theta_dot**2 * sintheta
-        ) / self.total_mass
+        temp = (force + self.polemass_length * theta_dot**2 * sintheta) / self.total_mass
         thetaacc = (self.gravconst * sintheta - costheta * temp) / (
             self.length * (4.0 / 3.0 - self.masspole * costheta**2 / self.total_mass)
         )
@@ -200,17 +184,15 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[dict] = None,
+        seed: int | None = None,
+        options: dict | None = None,
     ):
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
         state_init = np.array([0, 0, np.pi, 0], dtype=np.float32)
         high = np.array([1, 1, np.pi, 1], dtype=np.float32)
-        self.state = state_init + self.np_random.uniform(
-            low=-high, high=high, size=(4,)
-        )
+        self.state = state_init + self.np_random.uniform(low=-high, high=high, size=(4,))
         self.steps_beyond_terminated = None
 
         if self.render_mode == "human":
@@ -239,9 +221,7 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             else:  # mode == "rgb_array"
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
         if self.clock is None:
@@ -262,16 +242,26 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))
 
-        l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
+        left, right, top, bottom = (
+            -cartwidth / 2,
+            cartwidth / 2,
+            cartheight / 2,
+            -cartheight / 2,
+        )
         axleoffset = cartheight / 4.0
         cartx = x[0] * scale + self.screen_width / 2.0  # MIDDLE OF CART
         carty = 100  # TOP OF CART
-        cart_coords = [(l, b), (l, t), (r, t), (r, b)]
+        cart_coords = [
+            (left, bottom),
+            (left, top),
+            (right, top),
+            (right, bottom),
+        ]
         cart_coords = [(c[0] + cartx, c[1] + carty) for c in cart_coords]
         gfxdraw.aapolygon(self.surf, cart_coords, (0, 0, 0))
         gfxdraw.filled_polygon(self.surf, cart_coords, (0, 0, 0))
 
-        l, r, t, b = (
+        left, right, top, bottom = (
             -polewidth / 2,
             polewidth / 2,
             polelen - polewidth / 2,
@@ -279,7 +269,12 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         pole_coords = []
-        for coord in [(l, b), (l, t), (r, t), (r, b)]:
+        for coord in [
+            (left, bottom),
+            (left, top),
+            (right, top),
+            (right, bottom),
+        ]:
             coord = pygame.math.Vector2(coord).rotate_rad(-x[2])
             coord = (coord[0] + cartx, coord[1] + carty + axleoffset)
             pole_coords.append(coord)
@@ -311,9 +306,7 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.flip()
 
         elif self.render_mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            )
+            return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
 
     def close(self):
         if self.screen is not None:

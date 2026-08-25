@@ -63,11 +63,7 @@ dmypy.json
 
 # mlflow
 mlruns/
-artifacts/
-.dockerdata/
-infra/.env
-reports/generated/
-publication/images/
+outputs/
 *.log
 
 .pytest_cache/

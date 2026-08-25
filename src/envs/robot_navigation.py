@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from gymnasium.utils import seeding
+
 from src.utils.metrics_controller import MetricsCollector
 
 
@@ -22,12 +23,12 @@ class RobotNavigationConfig:
 
     max_steps: int = 400
     obstacle_count: int = 4
-    obstacle_radius_range: Tuple[float, float] = (0.05, 0.12)
+    obstacle_radius_range: tuple[float, float] = (0.05, 0.12)
     max_speed: float = 0.15
     control_dt: float = 0.05
     max_angular_velocity: float = math.pi
     success_radius: float = 0.05
-    window_size: Tuple[int, int] = (800, 600)
+    window_size: tuple[int, int] = (800, 600)
     obstacle_padding: float = 0.005
     obstacle_placement_attempts: int = 40
     obstacle_radius_shrink_factor: float = 0.85
@@ -35,11 +36,11 @@ class RobotNavigationConfig:
     layout_max_retries: int = 5
     obstacle_collision_penalty: float = 5.0
     moving_obstacle_count: int = 10
-    moving_speed_range: Tuple[float, float] = (0.08, 0.18)
+    moving_speed_range: tuple[float, float] = (0.08, 0.18)
     moving_direction_change_prob: float = 0.01
-    moving_obstacle_radius: Optional[float] = None
-    moving_obstacle_speed: Optional[float] = None
-    moving_obstacle_x_range: Optional[Tuple[float, float]] = (0.1, 0.9)
+    moving_obstacle_radius: float | None = None
+    moving_obstacle_speed: float | None = None
+    moving_obstacle_x_range: tuple[float, float] | None = (0.1, 0.9)
     moving_noise_std: float = 0.25
     collect_targets: bool = False
     target_count: int = 10
@@ -58,9 +59,9 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
     def __init__(
         self,
         *,
-        render_mode: Optional[str] = None,
-        config: Optional[RobotNavigationConfig] = None,
-        seed: Optional[int] = None,
+        render_mode: str | None = None,
+        config: RobotNavigationConfig | None = None,
+        seed: int | None = None,
     ) -> None:
         super().__init__()
         if render_mode not in (None, "human", "rgb_array"):
@@ -135,9 +136,9 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[dict] = None,
-    ) -> Tuple[np.ndarray, dict]:
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[np.ndarray, dict]:
         super().reset(seed=seed)
         if seed is not None:
             self.np_random, _ = seeding.np_random(seed)
@@ -173,9 +174,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             else:
                 moving_count = min(self.config.moving_obstacle_count, target_obstacles)
             if moving_count > 0:
-                selection = self._rng.choice(
-                    target_obstacles, size=moving_count, replace=False
-                )
+                selection = self._rng.choice(target_obstacles, size=moving_count, replace=False)
                 selection = np.atleast_1d(selection)
                 self._moving_indices = sorted(int(x) for x in selection)
                 self._moving_index_order = {
@@ -202,9 +201,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                     for _ in range(attempts_per_obstacle):
                         if self.config.collect_targets:
                             radius = float(self.config.target_radius)
-                        elif (
-                            is_moving and self.config.moving_obstacle_radius is not None
-                        ):
+                        elif is_moving and self.config.moving_obstacle_radius is not None:
                             radius = float(self.config.moving_obstacle_radius)
                         else:
                             radius = float(self._rng.uniform(radius_low, current_high))
@@ -257,9 +254,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             self._targets_remaining = int(
                 np.count_nonzero(self._obstacles[: self._num_obstacles, 2] > 0)
             )
-            self._target_total = (
-                self._targets_remaining if self.config.collect_targets else 0
-            )
+            self._target_total = self._targets_remaining if self.config.collect_targets else 0
             if not self._ensure_path_blocking_obstacle():
                 placement_failed = True
 
@@ -272,7 +267,8 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 self._place_targets_uniform(target_obstacles)
             else:
                 raise RuntimeError(
-                    "Failed to place non-overlapping obstacles; consider reducing obstacle_count or padding."
+                    "Failed to place non-overlapping obstacles; "
+                    "consider reducing obstacle_count or padding."
                 )
 
         if not self.config.collect_targets:
@@ -289,7 +285,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         }
         return observation, info
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
@@ -345,17 +341,13 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             capture_reward = captured * self.config.target_reward
 
         if self.config.collect_targets:
-            angle_penalty = self.config.heading_penalty_scale * (
-                heading_error / math.pi
-            )
+            angle_penalty = self.config.heading_penalty_scale * (heading_error / math.pi)
             reward = -distance - angle_penalty
             reward += capture_reward
             if goal_reached:
                 reward += 0.0
         else:
-            angle_penalty = self.config.heading_penalty_scale * (
-                heading_error / math.pi
-            )
+            angle_penalty = self.config.heading_penalty_scale * (heading_error / math.pi)
             reward = -distance - angle_penalty
             if in_obstacle:
                 reward -= self.config.obstacle_collision_penalty
@@ -378,9 +370,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             info["targets_remaining"] = self._targets_remaining
             info["captures"] = captured if capture_reward > 0 else 0
             info["targets_total"] = self._target_total
-            info["targets_captured_total"] = max(
-                0, self._target_total - self._targets_remaining
-            )
+            info["targets_captured_total"] = max(0, self._target_total - self._targets_remaining)
 
         if self.render_mode == "human":
             self.render()
@@ -389,9 +379,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def render(self):
         if self.render_mode not in ("human", "rgb_array"):
-            raise RuntimeError(
-                "Render mode must be 'human' or 'rgb_array' to draw the simulation."
-            )
+            raise RuntimeError("Render mode must be 'human' or 'rgb_array' to draw the simulation.")
 
         self._ensure_pygame()
         pygame = self._pygame
@@ -451,9 +439,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         observation[3] = math.sin(self.robot_angle)
         observation[4:6] = self.goal_position
         obstacle_slice = 6 + 3 * self._num_obstacles
-        observation[6:obstacle_slice] = self._obstacles[: self._num_obstacles].reshape(
-            -1
-        )
+        observation[6:obstacle_slice] = self._obstacles[: self._num_obstacles].reshape(-1)
         return observation
 
     def _initialize_moving_obstacles(self) -> None:
@@ -474,7 +460,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             direction = np.array([math.cos(angle), math.sin(angle)], dtype=np.float32)
             self._moving_velocities[idx] = direction * speed
 
-    def _moving_segment_bounds(self, order: int, radius: float) -> Tuple[float, float]:
+    def _moving_segment_bounds(self, order: int, radius: float) -> tuple[float, float]:
         if self.config.moving_obstacle_x_range is None:
             low, high = 0.1, 0.9
         else:
@@ -496,7 +482,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def _reflect_on_bounds(
         self, position: np.ndarray, velocity: np.ndarray, radius: float
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         clipped = position.copy()
         for axis in range(2):
             min_bound = radius
@@ -516,7 +502,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         radius: float,
         obstacle_idx: int,
         moving_set: set[int],
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         for other_idx in range(self._num_obstacles):
             if other_idx == obstacle_idx or other_idx in moving_set:
                 continue
@@ -584,7 +570,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 self._moving_velocities[i] = vi
                 self._moving_velocities[j] = vj
 
-    def _sample_goal_blocker_candidate(self, radius: float) -> Optional[np.ndarray]:
+    def _sample_goal_blocker_candidate(self, radius: float) -> np.ndarray | None:
         segment = self.goal_position - self.robot_position
         seg_len = float(np.linalg.norm(segment))
         if seg_len < 1e-6:
@@ -638,9 +624,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             candidate = self._sample_goal_blocker_candidate(radius)
             if candidate is None:
                 continue
-            if self._is_valid_obstacle(
-                candidate, self._num_obstacles, ignore_index=idx
-            ):
+            if self._is_valid_obstacle(candidate, self._num_obstacles, ignore_index=idx):
                 self._obstacles[idx] = candidate
                 return True
         return False
@@ -679,9 +663,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
             if not np.any(velocity):
                 angle = float(self._rng.uniform(0.0, 2 * math.pi))
-                direction = np.array(
-                    [math.cos(angle), math.sin(angle)], dtype=np.float32
-                )
+                direction = np.array([math.cos(angle), math.sin(angle)], dtype=np.float32)
                 velocity = direction * speed_scale
 
             noise_std = float(self.config.moving_noise_std) * speed_scale
@@ -694,17 +676,13 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 velocity = velocity / speed * speed_scale
             elif speed < 1e-6:
                 angle = float(self._rng.uniform(0.0, 2 * math.pi))
-                direction = np.array(
-                    [math.cos(angle), math.sin(angle)], dtype=np.float32
-                )
+                direction = np.array([math.cos(angle), math.sin(angle)], dtype=np.float32)
                 velocity = direction * speed_scale
             position = new_positions[obstacle_idx]
             displacement = velocity * dt
             candidate_pos = position + displacement
 
-            candidate_pos, velocity = self._reflect_on_bounds(
-                candidate_pos, velocity, radius
-            )
+            candidate_pos, velocity = self._reflect_on_bounds(candidate_pos, velocity, radius)
             candidate_pos, velocity = self._resolve_static_collisions(
                 candidate_pos,
                 velocity,
@@ -718,7 +696,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self._resolve_moving_collisions(new_positions)
 
-        for vel_idx, obstacle_idx in enumerate(self._moving_indices):
+        for obstacle_idx in self._moving_indices:
             if obstacle_idx >= self._num_obstacles:
                 continue
             self._obstacles[obstacle_idx, 0:2] = new_positions[obstacle_idx]
@@ -726,7 +704,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
     def _distance_to_goal(self) -> float:
         return float(np.linalg.norm(self.goal_position - self.robot_position))
 
-    def _nearest_target_vector(self) -> Optional[np.ndarray]:
+    def _nearest_target_vector(self) -> np.ndarray | None:
         best_vec = None
         best_dist = float("inf")
         for obstacle in self._obstacles[: self._num_obstacles]:
@@ -772,7 +750,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         candidate: np.ndarray,
         count: int,
         *,
-        ignore_index: Optional[int] = None,
+        ignore_index: int | None = None,
     ) -> bool:
         padding = self.config.obstacle_padding
         center = candidate[:2]
@@ -856,7 +834,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         self._surface = pygame.Surface(self.config.window_size)
         self._clock = pygame.time.Clock()
 
-    def _world_to_screen(self, position: np.ndarray) -> Tuple[int, int]:
+    def _world_to_screen(self, position: np.ndarray) -> tuple[int, int]:
         floor_left, floor_top, floor_width, floor_height = self._content_rect()
         x = int(floor_left + float(position[0]) * floor_width)
         y = int(floor_top + (1.0 - float(position[1])) * floor_height)
@@ -877,7 +855,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def _room_geometry(
         self,
-    ) -> Tuple[Tuple[int, int, int, int, int, int, int, int, int], int]:
+    ) -> tuple[tuple[int, int, int, int, int, int, int, int, int], int]:
         width, height = self.config.window_size
         size = (width, height)
         if self._room_geom is not None and self._room_geom_size == size:
@@ -925,11 +903,11 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         self._room_geom_size = size
         return self._room_geom, wall
 
-    def _floor_rect(self) -> Tuple[int, int, int, int]:
+    def _floor_rect(self) -> tuple[int, int, int, int]:
         geom, _ = self._room_geometry()
         return int(geom[5]), int(geom[6]), int(geom[7]), int(geom[8])
 
-    def _draw_outer_frame(self, outer: "pygame.Rect", wall: int) -> None:
+    def _draw_outer_frame(self, outer: Any, wall: int) -> None:
         pygame = self._pygame
         width, height = self.config.window_size
 
@@ -957,36 +935,28 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         while x >= frame_outer.left:
             x -= minor_step
         while x <= frame_outer.right:
-            pygame.draw.line(
-                fx, minor, (x, frame_outer.top), (x, frame_outer.bottom), width=1
-            )
+            pygame.draw.line(fx, minor, (x, frame_outer.top), (x, frame_outer.bottom), width=1)
             x += minor_step
 
         y = floor_top
         while y >= frame_outer.top:
             y -= minor_step
         while y <= frame_outer.bottom:
-            pygame.draw.line(
-                fx, minor, (frame_outer.left, y), (frame_outer.right, y), width=1
-            )
+            pygame.draw.line(fx, minor, (frame_outer.left, y), (frame_outer.right, y), width=1)
             y += minor_step
 
         x = floor_left
         while x >= frame_outer.left:
             x -= major_step
         while x <= frame_outer.right:
-            pygame.draw.line(
-                fx, major, (x, frame_outer.top), (x, frame_outer.bottom), width=2
-            )
+            pygame.draw.line(fx, major, (x, frame_outer.top), (x, frame_outer.bottom), width=2)
             x += major_step
 
         y = floor_top
         while y >= frame_outer.top:
             y -= major_step
         while y <= frame_outer.bottom:
-            pygame.draw.line(
-                fx, major, (frame_outer.left, y), (frame_outer.right, y), width=2
-            )
+            pygame.draw.line(fx, major, (frame_outer.left, y), (frame_outer.right, y), width=2)
             y += major_step
 
         pygame.draw.rect(fx, (0, 0, 0, 0), outer, border_radius=0)
@@ -995,11 +965,9 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
         # Inner cap band on the wall itself.
         outer_rim_w = max(6, int(wall * 0.19))
-        pygame.draw.rect(
-            self._surface, (250, 250, 252), outer, width=outer_rim_w, border_radius=0
-        )
+        pygame.draw.rect(self._surface, (250, 250, 252), outer, width=outer_rim_w, border_radius=0)
 
-    def _content_rect(self) -> Tuple[int, int, int, int]:
+    def _content_rect(self) -> tuple[int, int, int, int]:
         floor_left, floor_top, floor_w, floor_h = self._floor_rect()
         base = min(floor_w, floor_h)
         if base <= 1:
@@ -1007,9 +975,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
 
         max_margin = max(0, base // 2 - 2)
         margin_factor = 0.55
-        margin = min(
-            int(self._robot_visual_clearance_px(base) * margin_factor), max_margin
-        )
+        margin = min(int(self._robot_visual_clearance_px(base) * margin_factor), max_margin)
         for _ in range(2):
             content_w = max(1, floor_w - 2 * margin)
             content_h = max(1, floor_h - 2 * margin)
@@ -1028,7 +994,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             max(1, floor_h - 2 * margin),
         )
 
-    def _light_dir_unit(self) -> Tuple[float, float]:
+    def _light_dir_unit(self) -> tuple[float, float]:
         ld = np.asarray(self.light_dir, dtype=np.float32).reshape(-1)
         if ld.size < 2:
             return (-0.7071, -0.7071)
@@ -1039,7 +1005,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             return (-0.7071, -0.7071)
         return (x / norm, y / norm)
 
-    def _shadow_offset_px(self, scale: int) -> Tuple[int, int]:
+    def _shadow_offset_px(self, scale: int) -> tuple[int, int]:
         lx, ly = self._light_dir_unit()
         sx, sy = (-lx, -ly)
         length = max(4, int(scale * 0.018))
@@ -1090,14 +1056,12 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         pygame.draw.rect(shadow, (0, 0, 0, 70), shadow_rect, border_radius=6)
         self._surface.blit(shadow, (0, 0))
 
-        def lerp_point(
-            a: Tuple[int, int], b: Tuple[int, int], t: float
-        ) -> Tuple[int, int]:
+        def lerp_point(a: tuple[int, int], b: tuple[int, int], t: float) -> tuple[int, int]:
             return (int(a[0] * (1.0 - t) + b[0] * t), int(a[1] * (1.0 - t) + b[1] * t))
 
         def lerp_color(
-            a: Tuple[int, int, int], b: Tuple[int, int, int], t: float
-        ) -> Tuple[int, int, int]:
+            a: tuple[int, int, int], b: tuple[int, int, int], t: float
+        ) -> tuple[int, int, int]:
             return (
                 int(a[0] * (1.0 - t) + b[0] * t),
                 int(a[1] * (1.0 - t) + b[1] * t),
@@ -1105,12 +1069,12 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             )
 
         def shaded_trapezoid(
-            inner_a: Tuple[int, int],
-            inner_b: Tuple[int, int],
-            outer_a: Tuple[int, int],
-            outer_b: Tuple[int, int],
-            inner_color: Tuple[int, int, int],
-            outer_color: Tuple[int, int, int],
+            inner_a: tuple[int, int],
+            inner_b: tuple[int, int],
+            outer_a: tuple[int, int],
+            outer_b: tuple[int, int],
+            inner_color: tuple[int, int, int],
+            outer_color: tuple[int, int, int],
         ) -> None:
             steps = max(10, int(wall * 0.35))
             for i in range(steps):
@@ -1190,9 +1154,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         )
         self._surface.blit(seam, (0, 0))
         inner_outline_w = max(2, int(wall * 0.05))
-        pygame.draw.rect(
-            self._surface, (20, 22, 28), floor, width=inner_outline_w, border_radius=4
-        )
+        pygame.draw.rect(self._surface, (20, 22, 28), floor, width=inner_outline_w, border_radius=4)
 
         self._draw_outer_frame(outer, wall)
 
@@ -1203,17 +1165,13 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         floor_left, floor_top, floor_w, floor_h = self._floor_rect()
         floor = pygame.Rect(int(floor_left), int(floor_top), int(floor_w), int(floor_h))
         content_left, content_top, content_w, content_h = self._content_rect()
-        content = pygame.Rect(
-            int(content_left), int(content_top), int(content_w), int(content_h)
-        )
+        content = pygame.Rect(int(content_left), int(content_top), int(content_w), int(content_h))
         scale = min(content.width, content.height)
 
         goal_px = self._world_to_screen(self.goal_position)
         notch_h = max(int(scale * 0.065), int(wall * 0.75))
         half_h = max(6, notch_h // 2)
-        center_y = int(
-            np.clip(goal_px[1], floor.top + half_h + 2, floor.bottom - half_h - 2)
-        )
+        center_y = int(np.clip(goal_px[1], floor.top + half_h + 2, floor.bottom - half_h - 2))
         y_top_floor = center_y - half_h
         y_bot_floor = center_y + half_h
 
@@ -1235,10 +1193,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
             - 4
         )
         x_inner = (
-            floor.left
-            + max(1, int(wall_depth * 0.04))
-            - notch_shift_left_px
-            + notch_nudge_right_px
+            floor.left + max(1, int(wall_depth * 0.04)) - notch_shift_left_px + notch_nudge_right_px
         )
         taper = max(1, int(half_h * 0.18))
         outer_base_extra_px = max(2, int(half_h * 0.12))
@@ -1269,16 +1224,12 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 max(1, px_radius),
             )
             pygame.draw.circle(self._surface, (235, 140, 45), center, max(1, px_radius))
-            pygame.draw.circle(
-                self._surface, (150, 82, 20), center, max(1, px_radius), width=2
-            )
+            pygame.draw.circle(self._surface, (150, 82, 20), center, max(1, px_radius), width=2)
             highlight = (
                 int(center[0] + lx * px_radius * 0.35),
                 int(center[1] + ly * px_radius * 0.35),
             )
-            pygame.draw.circle(
-                self._surface, (255, 220, 165), highlight, max(1, px_radius // 3)
-            )
+            pygame.draw.circle(self._surface, (255, 220, 165), highlight, max(1, px_radius // 3))
 
     def _draw_robot(self) -> None:
         floor_left, floor_top, floor_w, floor_h = self._content_rect()
@@ -1297,7 +1248,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         dash = max(10, int(scale * 0.02))
         gap = max(7, int(scale * 0.014))
 
-        for start, end in zip(points[:-1], points[1:]):
+        for start, end in zip(points[:-1], points[1:], strict=True):
             x1, y1 = start
             x2, y2 = end
             dx = x2 - x1
@@ -1315,9 +1266,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 sy = int(y1 + uy * t)
                 ex = int(x1 + ux * t_end)
                 ey = int(y1 + uy * t_end)
-                pygame.draw.line(
-                    self._surface, color, (sx, sy), (ex, ey), width=line_width
-                )
+                pygame.draw.line(self._surface, color, (sx, sy), (ex, ey), width=line_width)
                 t += step
 
     def _draw_captured_points(self) -> None:
@@ -1332,9 +1281,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         for point in self.captured_points:
             x, y = self._world_to_screen(point)
             pygame.draw.circle(self._surface, (255, 220, 40), (x, y), radius)
-            pygame.draw.circle(
-                self._surface, (20, 20, 20), (x, y), radius, width=stroke
-            )
+            pygame.draw.circle(self._surface, (20, 20, 20), (x, y), radius, width=stroke)
             pygame.draw.line(
                 self._surface,
                 (20, 20, 20),
@@ -1350,7 +1297,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
                 width=stroke,
             )
 
-    def _draw_robot_body(self, center: Tuple[int, int], scale: int) -> None:
+    def _draw_robot_body(self, center: tuple[int, int], scale: int) -> None:
         pygame = self._pygame
         body_radius = self._robot_visual_body_radius_px(scale)
 
@@ -1366,9 +1313,7 @@ class RobotNavigationEnv(gym.Env[np.ndarray, np.ndarray]):
         shadow_rect.center = (center[0] + sx, center[1] + sy)
         shadow_layer = pygame.Surface((shadow_w, shadow_h), flags=pygame.SRCALPHA)
         shadow_layer.fill((0, 0, 0, 0))
-        pygame.draw.ellipse(
-            shadow_layer, (0, 0, 0, 60), pygame.Rect(0, 0, shadow_w, shadow_h)
-        )
+        pygame.draw.ellipse(shadow_layer, (0, 0, 0, 60), pygame.Rect(0, 0, shadow_w, shadow_h))
         self._surface.blit(shadow_layer, shadow_rect.topleft)
 
         # Build a small top-down sprite then rotate it.
@@ -1571,10 +1516,7 @@ class SimpleGoalController:
         )
 
         # Saturate speed so the robot slows as it nears the goal
-        if self.max_speed <= 0.0:
-            speed_ratio = 0.0
-        else:
-            speed_ratio = min(1.0, distance / (self.max_speed * 8.0))
+        speed_ratio = 0.0 if self.max_speed <= 0.0 else min(1.0, distance / (self.max_speed * 8.0))
         speed_ratio = float(np.clip(speed_ratio, 0.0, 1.0))
         return np.array([speed_ratio, angular_velocity], dtype=np.float32)
 
@@ -1591,9 +1533,7 @@ class RobotNavigationMetricsCollector(MetricsCollector):
             info.get("distance_to_goal", 0.0),
             step=step,
         )
-        self.rolling_window["distance_to_goal"].append(
-            info.get("distance_to_goal", 0.0)
-        )
+        self.rolling_window["distance_to_goal"].append(info.get("distance_to_goal", 0.0))
         self.append_metric(
             f"episode_stats/distance_to_goal_rolling_{self.rolling_window_size}",
             np.mean(self.rolling_window["distance_to_goal"]),
@@ -1624,9 +1564,7 @@ class RobotNavigationMetricsCollector(MetricsCollector):
             float(info.get("goal_reached", False)),
             step=step,
         )
-        self.rolling_window["goal_reached"].append(
-            float(info.get("goal_reached", False))
-        )
+        self.rolling_window["goal_reached"].append(float(info.get("goal_reached", False)))
         self.append_metric(
             f"episode_stats/goal_reached_rolling_{self.rolling_window_size}",
             np.mean(self.rolling_window["goal_reached"]),

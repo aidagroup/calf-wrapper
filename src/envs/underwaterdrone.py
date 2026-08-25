@@ -3,12 +3,14 @@
 Source revision: aidagroup/calf-enhance@afb5edc49427054c99d6fbfe87b603d126724eb8.
 """
 
-import numpy as np
+from typing import Any
+
 import gymnasium as gym
-from gymnasium import spaces
+import numpy as np
 import pygame
-from typing import Optional, Tuple, Dict, Any
+from gymnasium import spaces
 from scipy.optimize import minimize_scalar
+
 from src.utils.metrics_controller import MetricsCollector
 
 TIME_STEP_SIZE = 0.02
@@ -35,7 +37,7 @@ class UnderwaterDrone:
         init_x=None,
         init_y=None,
         m=DRONE_MASS,
-        I=DRONE_INERTIA,
+        inertia=DRONE_INERTIA,
         Cd=DRAG_COEFF,
         radius=DRONE_RADIUS,
         offset_lateral=OFFSET_LAT,
@@ -66,7 +68,7 @@ class UnderwaterDrone:
         self.omega = self.rng.uniform(-0.2, 0.2)
 
         self.m = m
-        self.I = I
+        self.I = inertia
         self.Cd = Cd
         self.radius = radius
         self.offset_lateral = offset_lateral
@@ -120,10 +122,7 @@ class UnderwaterDrone:
 
         v = np.array([self.v_x, self.v_y])
         speed = np.linalg.norm(v)
-        if speed > 1e-6:
-            drag_dir = -v / speed
-        else:
-            drag_dir = np.array([0.0, 0.0])
+        drag_dir = -v / speed if speed > 1e-6 else np.array([0.0, 0.0])
         F_drag = self.Cd * speed**2 * drag_dir
 
         F_net = thrust_inertial + F_drag + np.array([0.0, -self.gravity])
@@ -164,10 +163,7 @@ class UnderwaterDrone:
         AND within the horizontal hole region, i.e. x in [-hole_half, hole_half].
         """
         hole_half = self.hole_width / 2.0
-        if self.y >= self.top_y:
-            if -hole_half <= self.x <= hole_half:
-                return True
-        return False
+        return self.y >= self.top_y and -hole_half <= self.x <= hole_half
 
     def _near_borders(self):
         """
@@ -176,9 +172,7 @@ class UnderwaterDrone:
         return (
             np.abs(self.x) > MAX_X - 0.01
             or self.y < 0.0 + 0.01
-            or (
-                np.abs(self.x) > self.hole_width / 2.0 + 0.01 and self.y >= TOP_Y - 0.01
-            )
+            or (np.abs(self.x) > self.hole_width / 2.0 + 0.01 and self.y >= TOP_Y - 0.01)
         )
 
     def _freeze(self):
@@ -204,20 +198,16 @@ class UnderwaterDroneEnv(gym.Env):
 
     def __init__(
         self,
-        render_mode: Optional[str] = None,
-        seed: Optional[int] = None,
+        render_mode: str | None = None,
+        seed: int | None = None,
         init_x=None,
         init_y=None,
     ):
         # Define observation space
         # State is (x, y, theta, v_x, v_y, omega)
         self.observation_space = spaces.Box(
-            low=np.array(
-                [-np.inf, -np.inf, -1, -1, -np.inf, -np.inf, -np.inf], dtype=np.float32
-            ),
-            high=np.array(
-                [np.inf, np.inf, 1, 1, np.inf, np.inf, np.inf], dtype=np.float32
-            ),
+            low=np.array([-np.inf, -np.inf, -1, -1, -np.inf, -np.inf, -np.inf], dtype=np.float32),
+            high=np.array([np.inf, np.inf, 1, 1, np.inf, np.inf, np.inf], dtype=np.float32),
             dtype=np.float32,
         )
         self.rng = np.random.RandomState(seed)
@@ -344,15 +334,13 @@ class UnderwaterDroneEnv(gym.Env):
         self.reset()
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        self, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         self.n_resets += 1
 
         if seed is not None:
-            self.drone = UnderwaterDrone(
-                seed=seed, init_x=self.init_x, init_y=self.init_y
-            )
+            self.drone = UnderwaterDrone(seed=seed, init_x=self.init_x, init_y=self.init_y)
         elif self.rng is not None:
             self.drone = UnderwaterDrone(
                 random_generator=self.rng, init_x=self.init_x, init_y=self.init_y
@@ -387,18 +375,12 @@ class UnderwaterDroneEnv(gym.Env):
         pts = []
         for px in range(0, self.screen_width + 1, 10):
             xw = (px - self.origin_x) / self.scale_factor
-            theta = (
-                2
-                * np.pi
-                * (xw * self.scale_factor / self.wave_length - self.wave_speed * t)
-            )
+            theta = 2 * np.pi * (xw * self.scale_factor / self.wave_length - self.wave_speed * t)
             yoff = self.wave_amplitude * np.sin(theta)
             pts.append((px, int(y0 + yoff)))
         pygame.draw.lines(self.screen, (255, 255, 255, 120), False, pts, 2)
 
-    def step(
-        self, action: np.ndarray
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         self.last_action = action  #  ←  store action *before* physics
 
         # Execute drone physics
@@ -478,7 +460,7 @@ class UnderwaterDroneEnv(gym.Env):
         else:
             return 0.0
 
-    def _get_info(self) -> Dict[str, Any]:
+    def _get_info(self) -> dict[str, Any]:
         if self.drone._near_borders():
             self.n_near_borders += 1
         if self._is_in_high_cost_area():
@@ -510,9 +492,7 @@ class UnderwaterDroneEnv(gym.Env):
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
                 pygame.display.set_caption("Underwater Drone Simulator")
             else:  # rgb_array
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
@@ -534,17 +514,13 @@ class UnderwaterDroneEnv(gym.Env):
         self._create_heatmap()
 
         # —————— Initialize water-line positions ——————
-        self._water_lines = [
-            [y, xs, xe] for y, segs in self.water_segments for xs, xe in segs
-        ]
+        self._water_lines = [[y, xs, xe] for y, segs in self.water_segments for xs, xe in segs]
 
         if self.screen is None and self.render_mode in ["human", "rgb_array"]:
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
                 pygame.display.set_caption("Underwater Drone Simulator")
             else:  # rgb_array
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
@@ -631,13 +607,9 @@ class UnderwaterDroneEnv(gym.Env):
         # pole
         pygame.draw.rect(self.screen, (80, 80, 80), (cx, cy - pole_h, pole_w, pole_h))
         # flag rectangle (bright orange)
-        pygame.draw.rect(
-            self.screen, (255, 140, 0), (cx + pole_w, cy - pole_h + 2, flag_w, flag_h)
-        )
+        pygame.draw.rect(self.screen, (255, 140, 0), (cx + pole_w, cy - pole_h + 2, flag_w, flag_h))
         # black border around flag
-        pygame.draw.rect(
-            self.screen, (0, 0, 0), (cx + pole_w, cy - pole_h + 2, flag_w, flag_h), 1
-        )
+        pygame.draw.rect(self.screen, (0, 0, 0), (cx + pole_w, cy - pole_h + 2, flag_w, flag_h), 1)
 
     def _draw_thrust_arrows(self):
         """Draw thrust force arrows for current control on the drone."""
@@ -686,7 +658,7 @@ class UnderwaterDroneEnv(gym.Env):
             new_lines.append([y, xs2, xe2])
         self._water_lines = new_lines
 
-    def render(self) -> Optional[np.ndarray]:
+    def render(self) -> np.ndarray | None:
         if self.render_mode is None:
             return None
         if self.screen is None:
@@ -708,9 +680,7 @@ class UnderwaterDroneEnv(gym.Env):
 
         # 5) Trajectory
         if len(self.trajectory) > 1:
-            pts = [
-                (self.to_pixels_x(x), self.to_pixels_y(y)) for x, y in self.trajectory
-            ]
+            pts = [(self.to_pixels_x(x), self.to_pixels_y(y)) for x, y in self.trajectory]
             pygame.draw.lines(self.screen, (5, 5, 0), False, pts, 2)
             for i, p in enumerate(pts):
                 if i % 3 == 0:
@@ -809,9 +779,7 @@ class UnderwaterDroneEnv(gym.Env):
             right = w - int(self.crop_right_frac * w)
 
             # grab the cropped view (no copy) and convert to NumPy
-            region = full_surf.subsurface(
-                pygame.Rect(left, top, right - left, bottom - top)
-            )
+            region = full_surf.subsurface(pygame.Rect(left, top, right - left, bottom - top))
 
             # no re-scaling → no distortion, full native resolution
             return pygame.surfarray.array3d(region).transpose(1, 0, 2)
@@ -843,9 +811,7 @@ class UnderwaterDroneMetricsCollector(MetricsCollector):
             np.mean(self.rolling_window["is_in_hole"]),
             step=step,
         )
-        self.append_metric(
-            "episode_stats/avoidance_score", info["avoidance_score"], step=step
-        )
+        self.append_metric("episode_stats/avoidance_score", info["avoidance_score"], step=step)
         self.rolling_window["avoidance_score"].append(info["avoidance_score"])
         self.append_metric(
             f"episode_stats/avoidance_score_rolling_{self.rolling_window_size}",

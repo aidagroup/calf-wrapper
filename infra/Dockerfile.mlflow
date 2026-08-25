@@ -1,5 +1,0 @@
-FROM ghcr.io/mlflow/mlflow:v2.20.0
-
-RUN pip install --no-cache-dir \
-    boto3==1.36.26 \
-    psycopg2-binary==2.9.10

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import numpy as np
 from gymnasium import spaces
@@ -15,7 +14,6 @@ from gymnasium import spaces
 from src.envs.robot_navigation import (
     RobotNavigationConfig,
     RobotNavigationEnv,
-    RobotNavigationMetricsCollector,
 )
 
 
@@ -23,7 +21,7 @@ from src.envs.robot_navigation import (
 class RobotNavigationConstSpeedConfig(RobotNavigationConfig):
     """Config for constant-speed robot navigation (1D action: angular velocity only)."""
 
-    const_speed: Optional[float] = None
+    const_speed: float | None = None
 
 
 class RobotNavigationConstSpeedEnv(RobotNavigationEnv):
@@ -32,9 +30,9 @@ class RobotNavigationConstSpeedEnv(RobotNavigationEnv):
     def __init__(
         self,
         *,
-        render_mode: Optional[str] = None,
-        config: Optional[RobotNavigationConstSpeedConfig] = None,
-        seed: Optional[int] = None,
+        render_mode: str | None = None,
+        config: RobotNavigationConstSpeedConfig | None = None,
+        seed: int | None = None,
     ) -> None:
         if config is None:
             config = RobotNavigationConstSpeedConfig()
@@ -50,7 +48,7 @@ class RobotNavigationConstSpeedEnv(RobotNavigationEnv):
             dtype=np.float32,
         )
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         action = np.asarray(action, dtype=np.float32).flatten()
         angular_velocity = float(
             np.clip(

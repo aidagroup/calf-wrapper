@@ -3,12 +3,12 @@
 Source revision: aidagroup/calf-enhance@afb5edc49427054c99d6fbfe87b603d126724eb8.
 """
 
-from mlflow.entities import Metric
 import time
+from collections import defaultdict, deque
+
 import mlflow
-from collections import defaultdict
-from collections import deque
 import numpy as np
+from mlflow.entities import Metric
 
 
 def get_current_time_millis():
@@ -19,7 +19,6 @@ def get_current_time_millis():
 
 
 class MetricsCollector:
-
     def __init__(self, rolling_window_size: int = 20):
         self.pending_metrics: list[Metric] = []
         self.rolling_window_size = rolling_window_size

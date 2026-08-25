@@ -69,13 +69,11 @@ class CleanRLTD3:
         self.metadata = metadata
 
     @classmethod
-    def load(cls, path: Path | str, device: str = "cpu") -> "CleanRLTD3":
+    def load(cls, path: Path | str, device: str = "cpu") -> CleanRLTD3:
         target_device = torch.device(device)
         payload = torch.load(Path(path), map_location=target_device, weights_only=False)
         if payload.get("format") != "calf-enhance-cleanrl-td3-v1":
-            raise ValueError(
-                f"Unsupported TD3 checkpoint format: {payload.get('format')}"
-            )
+            raise ValueError(f"Unsupported TD3 checkpoint format: {payload.get('format')}")
 
         actor_state = payload["actor"]
         observation_dim = actor_state["fc1.weight"].shape[1]

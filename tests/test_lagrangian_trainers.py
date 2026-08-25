@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -10,9 +9,8 @@ import pytest
 import torch
 
 import src  # noqa: F401
-from run import train_ppo_lagrangian as ppo_lag
-from run import train_td3_lagrangian as td3_lag
-from scripts import run_lagrangian_matrix
+from calfwrapper.training import ppo_lagrangian as ppo_lag
+from calfwrapper.training import td3_lagrangian as td3_lag
 
 
 @pytest.mark.parametrize(
@@ -118,15 +116,11 @@ def test_td3_targets_do_not_bootstrap_through_episode_end():
 
 
 def test_ppo_squashed_policy_is_bounded_and_log_probability_reproducible():
-    envs = gym.vector.SyncVectorEnv(
-        [ppo_lag.make_env("Pendulum-v1", horizon=200, seed=4, index=0)]
-    )
+    envs = gym.vector.SyncVectorEnv([ppo_lag.make_env("Pendulum-v1", horizon=200, seed=4, index=0)])
     agent = ppo_lag.Agent(envs)
     observation, _ = envs.reset(seed=4)
     observation_tensor = torch.as_tensor(observation, dtype=torch.float32)
-    action, latent, log_probability, _, _, _ = agent.get_action_and_value(
-        observation_tensor
-    )
+    action, latent, log_probability, _, _, _ = agent.get_action_and_value(observation_tensor)
     repeated_action, _, repeated_log_probability, _, _, _ = agent.get_action_and_value(
         observation_tensor, latent
     )
@@ -140,11 +134,7 @@ def test_ppo_squashed_policy_is_bounded_and_log_probability_reproducible():
 
 def test_ppo_initial_action_std_is_expressed_in_environment_units():
     envs = gym.vector.SyncVectorEnv(
-        [
-            ppo_lag.make_env(
-                "CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0
-            )
-        ]
+        [ppo_lag.make_env("CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0)]
     )
     agent = ppo_lag.Agent(envs, initial_action_std=1.0)
     torch.testing.assert_close(
@@ -156,11 +146,7 @@ def test_ppo_initial_action_std_is_expressed_in_environment_units():
 
 def test_ppo_action_std_cap_is_expressed_in_environment_units():
     envs = gym.vector.SyncVectorEnv(
-        [
-            ppo_lag.make_env(
-                "CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0
-            )
-        ]
+        [ppo_lag.make_env("CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0)]
     )
     agent = ppo_lag.Agent(envs, initial_action_std=10.0)
     agent.cap_action_std(2.0)
@@ -177,9 +163,7 @@ def test_ppo_action_std_cap_is_expressed_in_environment_units():
 
 
 def test_actor_state_round_trip_preserves_deterministic_actions():
-    envs = gym.vector.SyncVectorEnv(
-        [td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=2)]
-    )
+    envs = gym.vector.SyncVectorEnv([td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=2)])
     observation_size = int(np.prod(envs.single_observation_space.shape))
     actor = td3_lag.Actor(observation_size, envs.single_action_space)
     restored = td3_lag.Actor(observation_size, envs.single_action_space)
@@ -203,9 +187,7 @@ def test_auv_constructor_seed_controls_later_unseeded_resets():
 
 
 def test_ppo_stochastic_evaluation_preserves_model_mode_parameters_and_rng():
-    envs = gym.vector.SyncVectorEnv(
-        [ppo_lag.make_env("Pendulum-v1", horizon=200, seed=4, index=0)]
-    )
+    envs = gym.vector.SyncVectorEnv([ppo_lag.make_env("Pendulum-v1", horizon=200, seed=4, index=0)])
     agent = ppo_lag.Agent(envs)
     agent.eval()
     before_parameters = copy.deepcopy(agent.state_dict())
@@ -223,9 +205,7 @@ def test_ppo_stochastic_evaluation_preserves_model_mode_parameters_and_rng():
 
 
 def test_ppo_checkpoint_disk_round_trip_and_compatibility_rejection(tmp_path):
-    envs = gym.vector.SyncVectorEnv(
-        [ppo_lag.make_env("Pendulum-v1", horizon=200, seed=5, index=0)]
-    )
+    envs = gym.vector.SyncVectorEnv([ppo_lag.make_env("Pendulum-v1", horizon=200, seed=5, index=0)])
     source = ppo_lag.Agent(envs)
     restored = ppo_lag.Agent(envs)
     optimizer = torch.optim.Adam(source.parameters())
@@ -267,9 +247,7 @@ def test_ppo_checkpoint_disk_round_trip_and_compatibility_rejection(tmp_path):
 
 
 def test_td3_checkpoint_disk_round_trip(tmp_path):
-    envs = gym.vector.SyncVectorEnv(
-        [td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=6)]
-    )
+    envs = gym.vector.SyncVectorEnv([td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=6)])
     observation_shape = envs.single_observation_space.shape
     action_shape = envs.single_action_space.shape
     observation_size = int(np.prod(observation_shape))
@@ -287,9 +265,7 @@ def test_td3_checkpoint_disk_round_trip(tmp_path):
         list(reward_q1.parameters()) + list(reward_q2.parameters())
     )
     cost_q_optimizer = torch.optim.Adam(cost_q.parameters())
-    replay = td3_lag.ReplayBuffer(
-        4, observation_shape, action_shape, torch.device("cpu")
-    )
+    replay = td3_lag.ReplayBuffer(4, observation_shape, action_shape, torch.device("cpu"))
     path = tmp_path / "td3.pt"
     args = td3_lag.Args()
     td3_lag.save_checkpoint(
@@ -359,18 +335,14 @@ def test_cartpole_saturated_preset_uses_nonterminating_saturated_environment():
 
 @pytest.mark.parametrize("terminal_cost", [0.0, 1.0])
 def test_cartpole_cost_redistribution_preserves_binary_episode_sum(terminal_cost):
-    args = dataclasses.replace(
-        ppo_lag.PRESETS["cartpole"][1], redistribute_terminal_cost=True
-    )
+    args = dataclasses.replace(ppo_lag.PRESETS["cartpole"][1], redistribute_terminal_cost=True)
     initial_observation = np.array([[0.4, -0.2, -1.0, 0.0, 0.3, 0.0]])
     current = ppo_lag.cartpole_cost_potential(initial_observation)
     initial = current.copy()
     total = 0.0
     for step in range(10):
         angle = np.pi * (1.0 - (step + 1) / 10.0)
-        successor = np.array(
-            [[0.4 - 0.04 * step, 0.0, np.cos(angle), np.sin(angle), 0.0, 0.1]]
-        )
+        successor = np.array([[0.4 - 0.04 * step, 0.0, np.cos(angle), np.sin(angle), 0.0, 0.1]])
         ended = np.array([step == 9])
         infos = {"final_observation": np.array([successor[0]], dtype=object)}
         costs, current, initial = ppo_lag.transition_costs(
@@ -431,16 +403,12 @@ def test_td3_initial_state_dual_estimate_uses_current_actor_and_cost_critic():
     actor = ScalarActor()
     cost_q = ActionCost()
     initial_observations = torch.zeros((4, 1))
-    raw, clipped = td3_lag.estimate_initial_failure_probability(
-        actor, cost_q, initial_observations
-    )
+    raw, clipped = td3_lag.estimate_initial_failure_probability(actor, cost_q, initial_observations)
     assert raw == pytest.approx(0.8)
     assert clipped == pytest.approx(0.8)
     with torch.no_grad():
         actor.action.fill_(0.2)
-    _, changed = td3_lag.estimate_initial_failure_probability(
-        actor, cost_q, initial_observations
-    )
+    _, changed = td3_lag.estimate_initial_failure_probability(actor, cost_q, initial_observations)
     assert changed == pytest.approx(0.2)
 
 
@@ -486,24 +454,3 @@ def test_td3_primal_step_reduces_cost_when_reward_is_flat():
     loss.backward()
     optimizer.step()
     assert action.item() < 0.8
-
-
-def test_lagrangian_launcher_routes_each_run_to_shared_mlflow():
-    command = run_lagrangian_matrix.command_for(
-        "pendulum",
-        seed=9,
-        device="cuda:0",
-        output_root=Path("artifacts"),
-        smoke=False,
-        tracking_uri="http://192.168.1.5:5001",
-        experiment_name="CALF-Wrapper/Lagrangian-Baselines",
-    )
-    assert command[command.index("--mlflow-tracking-uri") + 1] == (
-        "http://192.168.1.5:5001"
-    )
-    assert command[command.index("--mlflow-experiment-name") + 1] == (
-        "CALF-Wrapper/Lagrangian-Baselines"
-    )
-    assert command[command.index("--mlflow-run-name") + 1] == (
-        "ppo-lagrangian__pendulum__seed-9"
-    )

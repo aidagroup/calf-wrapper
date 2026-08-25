@@ -1,6 +1,7 @@
-import numpy as np
 import gymnasium as gym
+import numpy as np
 import pytest
+
 from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
 
 

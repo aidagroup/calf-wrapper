@@ -1,0 +1,41 @@
+\begin{table*}[t]
+  \centering
+  \caption{Holm-adjusted p-values for the paired comparisons with
+    the fallback policy and the base policy.}
+  \label{tab:all_adjusted_p_values}
+  \scriptsize
+  \begin{tabular}{llcccccc}
+    \toprule
+    & & \multicolumn{3}{c}{Fallback policy} & \multicolumn{3}{c}{Base policy} \\
+    Environment & Mode & Low & Mid & High & Low & Mid & High \\
+    \midrule
+    Pendulum & Conservative & $\mathbf{1.48\times10^{-4}}$ & $\mathbf{3.71\times10^{-5}}$ & $\mathbf{7.01\times10^{-6}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $0.172$ \\
+     & Guarded & $0.989$ & $\mathbf{0.002}$ & $\mathbf{1.97\times10^{-6}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{2.12\times10^{-9}}$ \\
+     & Moderate & $\mathbf{1.61\times10^{-9}}$ & $0.616$ & $\mathbf{2.69\times10^{-5}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{6.33\times10^{-12}}$ \\
+     & Balanced & $\mathbf{6.84\times10^{-15}}$ & $\mathbf{0.002}$ & $\mathbf{4.87\times10^{-5}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{1.14\times10^{-16}}$ & $\mathbf{2.45\times10^{-14}}$ \\
+     & High & $\mathbf{1.86\times10^{-16}}$ & $\mathbf{1.57\times10^{-9}}$ & $\mathbf{0.019}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{5.40\times10^{-15}}$ & $\mathbf{1.46\times10^{-15}}$ \\
+     & Almost Open & $\mathbf{1.58\times10^{-16}}$ & $\mathbf{5.08\times10^{-13}}$ & $\mathbf{0.04}$ & $\mathbf{7.17\times10^{-14}}$ & $\mathbf{1.07\times10^{-5}}$ & $\mathbf{5.76\times10^{-12}}$ \\
+    \midrule
+    CartPole & Conservative & $1$ & $0.886$ & $0.168$ & $\mathbf{1.20\times10^{-6}}$ & $1$ & $0.066$ \\
+     & Guarded & $0.603$ & $\mathbf{0.006}$ & $\mathbf{0.011}$ & $\mathbf{6.69\times10^{-11}}$ & $\mathbf{1.17\times10^{-5}}$ & $1$ \\
+     & Moderate & $0.603$ & $\mathbf{0.007}$ & $\mathbf{5.80\times10^{-4}}$ & $\mathbf{4.52\times10^{-5}}$ & $\mathbf{1.75\times10^{-4}}$ & $0.111$ \\
+     & Balanced & $1$ & $\mathbf{0.045}$ & $\mathbf{0.005}$ & $\mathbf{9.61\times10^{-8}}$ & $0.053$ & $1$ \\
+     & High & $1$ & $0.387$ & $\mathbf{0.003}$ & $\mathbf{1.04\times10^{-11}}$ & $1$ & $1$ \\
+     & Almost Open & $0.088$ & $0.886$ & $\mathbf{0.023}$ & $\mathbf{9.55\times10^{-14}}$ & $0.063$ & $\mathbf{0.009}$ \\
+    \midrule
+    AUV & Conservative & $\mathbf{8.42\times10^{-15}}$ & $\mathbf{6.91\times10^{-14}}$ & $\mathbf{5.79\times10^{-9}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $1$ \\
+     & Guarded & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{1.47\times10^{-15}}$ & $\mathbf{2.68\times10^{-16}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{7.11\times10^{-16}}$ \\
+     & Moderate & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{1.11\times10^{-15}}$ & $\mathbf{1.07\times10^{-16}}$ & $\mathbf{9.60\times10^{-16}}$ & $\mathbf{3.24\times10^{-15}}$ \\
+     & Balanced & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{2.10\times10^{-15}}$ & $\mathbf{5.71\times10^{-15}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{5.22\times10^{-14}}$ \\
+     & High & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{2.49\times10^{-15}}$ & $\mathbf{1.41\times10^{-11}}$ & $\mathbf{2.40\times10^{-12}}$ & $\mathbf{1.13\times10^{-8}}$ \\
+     & Almost Open & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{9.35\times10^{-17}}$ & $\mathbf{4.89\times10^{-14}}$ & $0.918$ & $\mathbf{4.58\times10^{-8}}$ & $\mathbf{7.31\times10^{-5}}$ \\
+    \midrule
+    Robot & Conservative & $1$ & $\mathbf{9.78\times10^{-5}}$ & $\mathbf{1.25\times10^{-13}}$ & $\mathbf{4.44\times10^{-13}}$ & $\mathbf{0.003}$ & $\mathbf{9.15\times10^{-13}}$ \\
+     & Guarded & $\mathbf{2.94\times10^{-10}}$ & $\mathbf{0.012}$ & $\mathbf{1.62\times10^{-15}}$ & $\mathbf{9.39\times10^{-12}}$ & $\mathbf{0.007}$ & $0.517$ \\
+     & Moderate & $\mathbf{2.01\times10^{-11}}$ & $\mathbf{5.23\times10^{-4}}$ & $\mathbf{9.99\times10^{-16}}$ & $\mathbf{5.82\times10^{-8}}$ & $0.063$ & $0.203$ \\
+     & Balanced & $\mathbf{4.60\times10^{-12}}$ & $\mathbf{2.07\times10^{-5}}$ & $\mathbf{9.99\times10^{-16}}$ & $\mathbf{6.20\times10^{-5}}$ & $\mathbf{0.007}$ & $0.512$ \\
+     & High & $\mathbf{2.36\times10^{-12}}$ & $\mathbf{2.74\times10^{-6}}$ & $\mathbf{9.99\times10^{-16}}$ & $\mathbf{0.047}$ & $0.063$ & $1$ \\
+     & Almost Open & $\mathbf{1.04\times10^{-12}}$ & $\mathbf{3.62\times10^{-7}}$ & $\mathbf{9.99\times10^{-16}}$ & $0.155$ & $1$ & $1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
