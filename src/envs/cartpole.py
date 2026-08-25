@@ -28,8 +28,31 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         "render_fps": 50,
     }
 
-    def __init__(self, render_mode: Optional[str] = None, seed: Optional[int] = None):
+    def __init__(
+        self,
+        render_mode: Optional[str] = None,
+        seed: Optional[int] = None,
+        terminate_on_out_of_bounds: bool = True,
+        saturate_state_on_out_of_bounds: bool = False,
+        reward_position_clip: Optional[float] = None,
+        position_termination_threshold: float = 5.0,
+        velocity_termination_threshold: float = 8.0,
+        angular_velocity_termination_threshold: float = 10.0,
+    ):
         super().__init__()
+
+        if reward_position_clip is not None and reward_position_clip <= 0:
+            raise ValueError("reward_position_clip must be positive")
+        for name, value in (
+            ("position_termination_threshold", position_termination_threshold),
+            ("velocity_termination_threshold", velocity_termination_threshold),
+            (
+                "angular_velocity_termination_threshold",
+                angular_velocity_termination_threshold,
+            ),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} must be positive")
 
         self.gravconst = 9.8
         self.masscart = 1.0
@@ -63,6 +86,14 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render_mode
+        self.terminate_on_out_of_bounds = terminate_on_out_of_bounds
+        self.saturate_state_on_out_of_bounds = saturate_state_on_out_of_bounds
+        self.reward_position_clip = reward_position_clip
+        self.position_termination_threshold = position_termination_threshold
+        self.velocity_termination_threshold = velocity_termination_threshold
+        self.angular_velocity_termination_threshold = (
+            angular_velocity_termination_threshold
+        )
 
         self.screen_width = 600
         self.screen_height = 400
@@ -101,21 +132,49 @@ class CartPoleSwingupEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
+        if self.saturate_state_on_out_of_bounds:
+            clipped_x = float(
+                np.clip(
+                    x,
+                    -self.position_termination_threshold,
+                    self.position_termination_threshold,
+                )
+            )
+            if clipped_x != x and np.sign(x_dot) == np.sign(x):
+                x_dot = 0.0
+            x = clipped_x
+            x_dot = float(
+                np.clip(
+                    x_dot,
+                    -self.velocity_termination_threshold,
+                    self.velocity_termination_threshold,
+                )
+            )
+            theta_dot = float(
+                np.clip(
+                    theta_dot,
+                    -self.angular_velocity_termination_threshold,
+                    self.angular_velocity_termination_threshold,
+                )
+            )
+
         self.state = (x, x_dot, theta, theta_dot)
 
-        terminated = bool(
-            x < -5
-            or x > 5
-            or theta_dot < -10
-            or theta_dot > 10
-            or x_dot < -8
-            or x_dot > 8
+        terminated = self.terminate_on_out_of_bounds and bool(
+            abs(x) > self.position_termination_threshold
+            or abs(theta_dot) > self.angular_velocity_termination_threshold
+            or abs(x_dot) > self.velocity_termination_threshold
         )
 
         if not terminated:
+            reward_x = (
+                float(np.clip(x, -self.reward_position_clip, self.reward_position_clip))
+                if self.reward_position_clip is not None
+                else x
+            )
             reward = (
                 -0.5 * angle_normalize(theta) ** 2
-                - 0.5 * x**2
+                - 0.5 * reward_x**2
                 - 0.05 * theta_dot**2
                 - 0.05 * x_dot**2
             )

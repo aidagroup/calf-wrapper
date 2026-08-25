@@ -15,15 +15,17 @@ class UnderwaterDroneNominalController(Controller):
 
     def __init__(
         self,
-        kp_y: float = 2.0,
+        kp_y: float = 0.6,
         kd_y: float = 1.2,
         kp_x: float = 1.5,
         kd_x: float = 0.8,
+        target_y_margin: float = 0.1,
     ) -> None:
         self.kp_y = kp_y
         self.kd_y = kd_y
         self.kp_x = kp_x
         self.kd_x = kd_x
+        self.target_y_margin = target_y_margin
 
     def get_action(self, observation: np.ndarray) -> np.ndarray:
         observation = np.asarray(observation)
@@ -38,7 +40,9 @@ class UnderwaterDroneNominalController(Controller):
         velocity_y = obs[:, 5:6]
 
         force_y = (
-            GRAVITY * DRONE_MASS + self.kp_y * (TOP_Y - y) - self.kd_y * velocity_y
+            GRAVITY * DRONE_MASS
+            + self.kp_y * (TOP_Y + self.target_y_margin - y)
+            - self.kd_y * velocity_y
         )
         force_x = -self.kp_x * x - self.kd_x * velocity_x
 

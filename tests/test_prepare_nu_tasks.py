@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from scripts.prepare_nu_tasks import infinity_ablation_tasks, sensitivity_tasks
+from scripts.prepare_nu_tasks import (
+    infinity_ablation_tasks,
+    sensitivity_tasks,
+    threshold_sweep_tasks,
+)
 
 
 def calibration_row(n=2.0, nu=0.25):
@@ -55,3 +59,36 @@ def test_infinity_ablation_has_paired_finite_and_disabled_gate_tasks():
     }
     assert sum(task.calf_change_rate == 0.25 for task in wrapper_tasks) == 3
     assert sum(task.calf_change_rate == float("inf") for task in wrapper_tasks) == 3
+
+
+def test_threshold_sweep_includes_nominal_and_infinity(tmp_path):
+    checkpoint_dir = tmp_path / "ppo_Pendulum-v1_3" / "checkpoints"
+    checkpoint_dir.mkdir(parents=True)
+    for step in (3000, 6000, 9000):
+        (checkpoint_dir / f"ppo_checkpoint_{step}_steps.zip").write_bytes(b"model")
+    protocol = {
+        "threshold_sweep": {"multipliers": [0.5, 1, "infinity"]},
+        "evaluation": {"evaluation_seed": 17, "trials": 30},
+        "environments": {
+            "pendulum": {
+                "env_id": "Pendulum-v1",
+                "algorithm": "ppo",
+                "checkpoint_directory_glob": "ppo_Pendulum-v1_*",
+                "checkpoint_filename_glob": "ppo_checkpoint_*_steps.zip",
+                "training_horizon": 9000,
+                "nominal_nu": 0.25,
+                "training_seed": 3,
+                "checkpoint_stages": {"early": 3000, "mid": 6000, "late": 9000},
+            }
+        },
+    }
+
+    tasks = threshold_sweep_tasks(
+        protocol, artifacts_root=tmp_path, matrix_id="threshold-sweep"
+    )
+
+    assert len(tasks) == 9
+    assert {task.calf_mode for task in tasks} == {"conservative"}
+    assert {task.calf_change_rate for task in tasks} == {0.125, 0.25, float("inf")}
+    assert {task.nu_multiplier for task in tasks} == {0.5, 1.0, float("inf")}
+    assert {task.checkpoint_stage for task in tasks} == {"early", "mid", "late"}

@@ -11,6 +11,7 @@ import tempfile
 import json
 import csv
 import shutil
+import hashlib
 import tyro
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecEnv
@@ -32,7 +33,7 @@ from src.utils import NumpyEncoder
 from src import run_path
 from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalController
 from src.controllers.underwaterdrone import UnderwaterDroneNominalController
-from src.goal_reaching import goal_reaching_mask
+from src.goal_reaching import goal_neighborhood_mask, goal_reaching_mask
 from src.models.cleanrl_td3 import CleanRLTD3
 from src.calf_modes import (
     CalfMode,
@@ -111,6 +112,33 @@ class EvalConfig:
     n_steps: int
     """Number of evaluation steps to run"""
 
+    critic_upper_bound: Optional[float] = None
+    """Environment-specific upper bound applied to critic values"""
+
+    clip_critic: bool = True
+    """Whether to apply critic_upper_bound before CALF comparisons"""
+
+    lock_base_in_goal_set: bool = True
+    """Whether CALF always selects the fallback policy inside the goal set"""
+
+    goal_lock_distance: float = 0.0
+    """Distance d* from the goal set at which CALF always selects fallback"""
+
+    cartpole_terminate_on_out_of_bounds: bool = False
+    """Whether CartPole evaluation terminates at configured state bounds"""
+
+    cartpole_saturate_state_on_out_of_bounds: bool = False
+    """Whether nonterminating CartPole evaluation saturates state at configured bounds"""
+
+    cartpole_position_termination_threshold: float = 5.0
+    """CartPole absolute position termination threshold"""
+
+    cartpole_velocity_termination_threshold: float = 8.0
+    """CartPole absolute cart-velocity termination threshold"""
+
+    cartpole_angular_velocity_termination_threshold: float = 10.0
+    """CartPole absolute angular-velocity termination threshold"""
+
     intervention: InterventionConfig = field(default_factory=InterventionConfig)
     """Advantage-based intervention configuration"""
 
@@ -163,6 +191,9 @@ class EvalConfig:
     nu_calibration_rule: Optional[str] = None
     """Named deterministic rule used to calibrate nu, when applicable"""
 
+    nu_multiplier: Optional[float] = None
+    """Multiplier of the nominal environment-specific nu in a threshold sweep"""
+
 
 presets = {
     # Preset configurations for different environments
@@ -204,6 +235,7 @@ presets = {
             seed=42,
             n_envs=30,
             n_steps=200,
+            critic_upper_bound=0.0,
         ),
     ),
     "cartpole": (
@@ -215,6 +247,7 @@ presets = {
             ),
             env_id="CartpoleSwingupEnvLong-v0",
             n_steps=1000,
+            critic_upper_bound=0.0,
             model_path=run_path
             / "artifacts"
             / "ppo_CartpoleSwingupEnv-v0_42"
@@ -224,9 +257,15 @@ presets = {
             deterministic=True,
             algorithm="ppo",
             stabilizing_policy=CartpoleEnergyBasedStabilizingPolicy(
-                pd_coefs=[70, 10.0, 20.0, 10.0],
-                gain=0.3,
-                gain_pos_vel=0.5,
+                pd_coefs=[77.76, 8.07, 20.72, 11.18],
+                gain=2.2,
+                gain_pos_vel=0.6,
+                gain_pos=0.8,
+                swing_position_reference_gain=4.10,
+                switch_loc=0.82,
+                blend_width=0.05,
+                velocity_brake_threshold=4.5,
+                velocity_brake_position_threshold=0.75,
                 action_min=-10.0,
                 action_max=10.0,
             ),
@@ -258,6 +297,8 @@ presets = {
             seed=42,
             n_envs=30,
             n_steps=1500,
+            critic_upper_bound=0.0,
+            goal_lock_distance=0.16,
         ),
     ),
     "robot-navigation": (
@@ -282,6 +323,7 @@ presets = {
             seed=42,
             n_envs=30,
             n_steps=1000,
+            critic_upper_bound=50.0,
         ),
     ),
 }
@@ -388,9 +430,32 @@ def make_env(
     seed: int,
     wrapper_class: Callable[[gym.Env], gym.Env],
     wrapper_kwargs: dict[str, Any],
+    cartpole_terminate_on_out_of_bounds: bool = False,
+    cartpole_saturate_state_on_out_of_bounds: bool = False,
+    cartpole_position_termination_threshold: float = 5.0,
+    cartpole_velocity_termination_threshold: float = 8.0,
+    cartpole_angular_velocity_termination_threshold: float = 10.0,
 ) -> Callable[[], gym.Env]:
     def _init() -> gym.Env:
-        env = gym.make(env_id, render_mode="rgb_array")
+        env_kwargs = {}
+        if env_id == "CartpoleSwingupEnvLong-v0":
+            env_kwargs["terminate_on_out_of_bounds"] = (
+                cartpole_terminate_on_out_of_bounds
+            )
+            env_kwargs["saturate_state_on_out_of_bounds"] = (
+                cartpole_saturate_state_on_out_of_bounds
+            )
+            env_kwargs["reward_position_clip"] = 5.0
+            env_kwargs["position_termination_threshold"] = (
+                cartpole_position_termination_threshold
+            )
+            env_kwargs["velocity_termination_threshold"] = (
+                cartpole_velocity_termination_threshold
+            )
+            env_kwargs["angular_velocity_termination_threshold"] = (
+                cartpole_angular_velocity_termination_threshold
+            )
+        env = gym.make(env_id, render_mode="rgb_array", **env_kwargs)
         env.action_space.seed(seed + rank)
         if wrapper_class is not None:
             env = wrapper_class(env, **wrapper_kwargs)
@@ -417,6 +482,10 @@ def main(config: EvalConfig):
             ],
             "calf.resolved_relaxprob_init": resolved_calf["relaxprob_init"],
             "calf.resolved_relaxprob_factor": resolved_calf["relaxprob_factor"],
+            "calf.critic_upper_bound": config.critic_upper_bound,
+            "calf.clip_critic": config.clip_critic,
+            "calf.lock_base_in_goal_set": config.lock_base_in_goal_set,
+            "calf.goal_lock_distance": config.goal_lock_distance,
         }
     )
     if config.record_video:
@@ -441,6 +510,21 @@ def main(config: EvalConfig):
                     {"video_folder": video_folder / f"env_{rank:03d}"}
                     if config.record_video
                     else None
+                ),
+                cartpole_terminate_on_out_of_bounds=(
+                    config.cartpole_terminate_on_out_of_bounds
+                ),
+                cartpole_saturate_state_on_out_of_bounds=(
+                    config.cartpole_saturate_state_on_out_of_bounds
+                ),
+                cartpole_position_termination_threshold=(
+                    config.cartpole_position_termination_threshold
+                ),
+                cartpole_velocity_termination_threshold=(
+                    config.cartpole_velocity_termination_threshold
+                ),
+                cartpole_angular_velocity_termination_threshold=(
+                    config.cartpole_angular_velocity_termination_threshold
                 ),
             )
             for rank in range(config.n_envs)
@@ -467,6 +551,18 @@ def main(config: EvalConfig):
             relaxprob_init=float(resolved_calf["relaxprob_init"]),
             relaxprob_factor=float(resolved_calf["relaxprob_factor"]),
             seed=config.seed,
+            critic_upper_bound=(
+                config.critic_upper_bound if config.clip_critic else None
+            ),
+            fallback_lock_mask=(
+                (
+                    lambda obs: goal_neighborhood_mask(
+                        config.env_id, obs, config.goal_lock_distance
+                    )
+                )
+                if config.lock_base_in_goal_set
+                else None
+            ),
         )
         data = run_episode(
             lambda obs: model.predict(obs, deterministic=config.deterministic)[0],
@@ -516,6 +612,32 @@ def main(config: EvalConfig):
     for i, reward in enumerate(final_rewards):
         mlflow.log_metric("reward", reward, step=i)
     successes = trial_successes(config.env_id, data)
+    episode_lengths = np.asarray(
+        [sum(item["active"][trial] for item in data) for trial in range(len(successes))],
+        dtype=np.int64,
+    )
+    base_policy_calls = np.zeros(len(successes), dtype=np.int64)
+    fallback_calls = np.zeros(len(successes), dtype=np.int64)
+    critic_calls = np.zeros(len(successes), dtype=np.int64)
+    selection_hashers = [hashlib.sha256() for _ in range(len(successes))]
+    for item in data:
+        for trial, (active, info) in enumerate(zip(item["active"], item["info"])):
+            if not active:
+                continue
+            if "calf.base_action_applied" in info:
+                critic_calls[trial] += 1
+                base_applied = bool(info["calf.base_action_applied"])
+            elif "intervention.base_action_applied" in info:
+                base_applied = bool(info["intervention.base_action_applied"])
+            else:
+                base_applied = config.eval_mode != "fallback"
+            if base_applied:
+                base_policy_calls[trial] += 1
+                selection_hashers[trial].update(b"B")
+            else:
+                fallback_calls[trial] += 1
+                selection_hashers[trial].update(b"F")
+    selection_sha256 = [hasher.hexdigest() for hasher in selection_hashers]
 
     confidence_interval = float(
         1.96 * np.std(final_rewards) / np.sqrt(len(final_rewards))
@@ -526,6 +648,9 @@ def main(config: EvalConfig):
         "reward_ci95_half_width": confidence_interval,
         "goal_reaching_rate": float(np.mean(successes) * 100),
         "n_trials": float(len(final_rewards)),
+        "mean_base_policy_calls": float(np.mean(base_policy_calls)),
+        "mean_fallback_calls": float(np.mean(fallback_calls)),
+        "mean_critic_calls": float(np.mean(critic_calls)),
     }
     calf_infos = [
         info
@@ -598,9 +723,26 @@ def main(config: EvalConfig):
         "checkpoint_step": config.checkpoint_step,
         "nu_calibration_n": config.nu_calibration_n,
         "nu_calibration_rule": config.nu_calibration_rule,
+        "nu_multiplier": (
+            "infinity"
+            if config.nu_multiplier is not None and np.isposinf(config.nu_multiplier)
+            else config.nu_multiplier
+        ),
         "model_path": str(config.model_path),
         "evaluation_seed": config.seed,
         "horizon": config.n_steps,
+        "critic_upper_bound": config.critic_upper_bound,
+        "clip_critic": config.clip_critic,
+        "lock_base_in_goal_set": config.lock_base_in_goal_set,
+        "goal_lock_distance": config.goal_lock_distance,
+        "cartpole_termination": {
+            "enabled": config.cartpole_terminate_on_out_of_bounds,
+            "position_threshold": config.cartpole_position_termination_threshold,
+            "velocity_threshold": config.cartpole_velocity_termination_threshold,
+            "angular_velocity_threshold": (
+                config.cartpole_angular_velocity_termination_threshold
+            ),
+        },
         "calf": resolved_calf,
         "intervention": {
             "critic_path": (
@@ -624,7 +766,16 @@ def main(config: EvalConfig):
         with open(trial_filepath, "w", newline="") as f:
             writer = csv.DictWriter(
                 f,
-                fieldnames=["trial", "reward", "goal_reached", "episode_length"],
+                fieldnames=[
+                    "trial",
+                    "reward",
+                    "goal_reached",
+                    "episode_length",
+                    "base_policy_calls",
+                    "fallback_calls",
+                    "critic_calls",
+                    "selection_sha256",
+                ],
             )
             writer.writeheader()
             for trial, (reward, success) in enumerate(zip(final_rewards, successes)):
@@ -633,9 +784,11 @@ def main(config: EvalConfig):
                         "trial": trial,
                         "reward": float(reward),
                         "goal_reached": bool(success),
-                        "episode_length": int(
-                            sum(item["active"][trial] for item in data)
-                        ),
+                        "episode_length": int(episode_lengths[trial]),
+                        "base_policy_calls": int(base_policy_calls[trial]),
+                        "fallback_calls": int(fallback_calls[trial]),
+                        "critic_calls": int(critic_calls[trial]),
+                        "selection_sha256": selection_sha256[trial],
                     }
                 )
         if config.save_episode_data:

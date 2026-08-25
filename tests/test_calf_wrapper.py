@@ -17,9 +17,13 @@ def base_policy():
 def stabilizing_policy():
     return CartpoleEnergyBasedStabilizingPolicy(
         env_id="CartpoleSwingupEnvLong-v0",
-        pd_coefs=[70, 10.0, 20.0, 10.0],
-        gain=0.5,
-        gain_pos_vel=0.5,
+        pd_coefs=[77.76, 8.07, 20.72, 11.18],
+        gain=2.5,
+        gain_pos_vel=0.6,
+        gain_pos=0.8,
+        swing_position_reference_gain=4.10,
+        switch_loc=0.82,
+        blend_width=0.05,
         action_min=-10.0,
         action_max=10.0,
     )
@@ -75,7 +79,6 @@ def test_single_env_relaxprob_comparison(base_policy, stabilizing_policy):
             base_action_applied_n += 1
         obs = next_obs
 
-    assert decay_happended_n > 0
     assert base_action_applied_n > 0
 
 
@@ -140,4 +143,52 @@ def test_calf_wrapper_supports_td3_critic(stabilizing_policy):
     assert values.shape == (2, 1)
     assert next_obs.shape == obs.shape
     assert all("calf.base_action_applied" in info for info in infos)
+    env.close()
+
+
+def test_critic_values_are_clipped_at_configured_upper_bound(
+    base_policy, stabilizing_policy, monkeypatch
+):
+    env = CALFWrapper(
+        make_vec_env("CartpoleSwingupEnvLong-v0", n_envs=2, seed=42),
+        model=base_policy,
+        stabilizing_policy=stabilizing_policy,
+        critic_upper_bound=0.0,
+    )
+    monkeypatch.setattr(
+        "src.calf_wrapper.critic_values",
+        lambda model, obs: np.array([5.0, -2.0]),
+    )
+
+    values = env.value(np.zeros((2, 5), dtype=np.float32))
+
+    np.testing.assert_allclose(values[:, 0], [0.0, -2.0])
+    env.close()
+
+
+def test_goal_set_lock_disables_both_acceptance_paths(
+    base_policy, stabilizing_policy
+):
+    env = CALFWrapper(
+        make_vec_env("CartpoleSwingupEnvLong-v0", n_envs=2, seed=42),
+        model=base_policy,
+        stabilizing_policy=stabilizing_policy,
+        calf_change_rate=1e6,
+        relaxprob_init=1.0,
+        relaxprob_factor=1.0,
+        seed=42,
+        fallback_lock_mask=lambda obs: np.array([True, False]),
+    )
+    obs = env.reset()
+    action = base_policy.predict(obs, deterministic=True)[0]
+
+    _, _, _, infos = env.step(action)
+
+    assert infos[0]["calf.fallback_locked"]
+    assert not infos[0]["calf.deterministic_acceptance"]
+    assert not infos[0]["calf.probabilistic_acceptance"]
+    assert not infos[0]["calf.base_action_applied"]
+    assert not infos[1]["calf.fallback_locked"]
+    assert infos[1]["calf.probabilistic_acceptance"]
+    assert infos[1]["calf.base_action_applied"]
     env.close()

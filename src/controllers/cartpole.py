@@ -12,12 +12,33 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
         action_min: float,
         action_max: float,
         env_id: str = "CartpoleSwingupEnvLong-v0",
+        gain_pos: float = 0.0,
+        swing_position_reference_gain: float = 0.0,
+        switch_loc: float = 0.9,
+        blend_width: float = 0.0,
+        velocity_brake_threshold: float | None = None,
+        velocity_brake_position_threshold: float | None = None,
+        action_bias: float = 0.0,
     ):
         self.pd_coefs = pd_coefs
         self.gain = gain
         self.gain_pos_vel = gain_pos_vel
+        self.gain_pos = gain_pos
+        self.swing_position_reference_gain = swing_position_reference_gain
         self.action_min = action_min
         self.action_max = action_max
+        self.switch_loc = switch_loc
+        self.blend_width = blend_width
+        if velocity_brake_threshold is not None and velocity_brake_threshold <= 0:
+            raise ValueError("velocity_brake_threshold must be positive")
+        if (
+            velocity_brake_position_threshold is not None
+            and velocity_brake_position_threshold < 0
+        ):
+            raise ValueError("velocity_brake_position_threshold must be nonnegative")
+        self.velocity_brake_threshold = velocity_brake_threshold
+        self.velocity_brake_position_threshold = velocity_brake_position_threshold
+        self.action_bias = action_bias
 
         env = gym.make(env_id)
         self.masscart = env.unwrapped.masscart
@@ -27,6 +48,7 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
         self.total_mass = self.masscart + self.masspole
         self.moment_of_inertia = 4 / 3 * self.masspole * self.length**2
         self.polemass_length = self.masspole * self.length
+        env.close()
 
     def get_action(self, observation):
         if observation.ndim == 1:
@@ -48,29 +70,51 @@ class CartpoleEnergyBasedStabilizingPolicy(Controller):
             0.5 * self.moment_of_inertia * angle_vel**2
             + self.polemass_length * self.gravconst * (cos_angle - 1)
         )
+        swing_position_reference = self.swing_position_reference_gain * sin_angle
         target_acc = self.gain * (
             energy * cos_angle * angle_vel - self.gain_pos_vel * pos_vel
-        )
+        ) - self.gain_pos * (pos - swing_position_reference)
 
         energy_based_action = (
             self.total_mass * target_acc
-            - self.polemass_length * sin_angle * angle_vel
+            - self.polemass_length * sin_angle * angle_vel**2
             + cos_angle
             * self.polemass_length
             * (self.gravconst * sin_angle - target_acc)
             / self.moment_of_inertia
         )
 
-        pos_clipped = np.clip(pos, -1.0, 1.0)
-        pos_vel_clipped = np.clip(pos_vel, -1.0, 1.0)
-
         pd_action = (
             angle * self.pd_coefs[0]
-            + pos_clipped * self.pd_coefs[1]
+            + pos * self.pd_coefs[1]
             + angle_vel * self.pd_coefs[2]
-            + pos_vel_clipped * self.pd_coefs[3]
+            + pos_vel * self.pd_coefs[3]
         )
-        action = np.where(cos_angle > 0.9, pd_action, energy_based_action)
-        action = np.clip(action, self.action_min, self.action_max)
+        if self.blend_width > 0:
+            blend = np.clip(
+                (cos_angle - (self.switch_loc - self.blend_width))
+                / (2 * self.blend_width),
+                0.0,
+                1.0,
+            )
+            blend = blend**2 * (3 - 2 * blend)
+            action = (1 - blend) * energy_based_action + blend * pd_action
+        else:
+            action = np.where(
+                cos_angle > self.switch_loc, pd_action, energy_based_action
+            )
+        if self.velocity_brake_threshold is not None:
+            braking_action = np.where(pos_vel > 0, self.action_min, self.action_max)
+            braking_required = np.abs(pos_vel) > self.velocity_brake_threshold
+            if self.velocity_brake_position_threshold is not None:
+                braking_required &= (
+                    np.abs(pos) > self.velocity_brake_position_threshold
+                )
+            action = np.where(
+                braking_required,
+                braking_action,
+                action,
+            )
+        action = np.clip(action + self.action_bias, self.action_min, self.action_max)
 
         return action

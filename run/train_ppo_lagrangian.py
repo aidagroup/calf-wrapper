@@ -9,6 +9,7 @@ finite-horizon CMDP remains Markov.
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import random
 import socket
@@ -45,21 +46,28 @@ class Args:
     num_minibatches: int = 32
     update_epochs: int = 10
     learning_rate: float = 1e-3
+    anneal_lr: bool = False
+    anneal_lr_start_fraction: float = 0.5
     reward_scale: float = 0.01
     gamma: float = 0.98
     gae_lambda: float = 0.95
     cost_gae_lambda: float = 0.95
+    redistribute_terminal_cost: bool = False
+    normalize_advantage_across_rollout: bool = False
     clip_coef: float = 0.2
     ent_coef: float = 0.0
     reward_vf_coef: float = 0.5
     cost_vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     target_kl: float | None = None
+    initial_action_std: float = 2.0
     cost_limit: float = 0.05
     lambda_init: float = 0.0
     lambda_lr: float = 0.05
     lambda_update_episodes: int = 20
     lambda_max: float = 10_000.0
+    dual_start_after_first_success: bool = False
+    max_action_std_after_first_success: float | None = None
     seed: int = 9
     device: str = "cpu"
     torch_deterministic: bool = True
@@ -67,10 +75,18 @@ class Args:
     evaluation_seed: int = 10_000
     paired_evaluation_episodes: int = 30
     paired_evaluation_seed: int = 42
+    save_model_every_steps: int = 3_000
+    evaluation_checkpoint: Path | None = None
     output_dir: Path = run_path / "artifacts" / "ppo_lagrangian"
     mlflow_tracking_uri: str | None = None
     mlflow_experiment_name: str = "CALF-Wrapper/Lagrangian-Baselines"
     mlflow_run_name: str | None = None
+    cartpole_terminate_on_out_of_bounds: bool = True
+    cartpole_saturate_state_on_out_of_bounds: bool = False
+    cartpole_position_termination_threshold: float = 5.0
+    cartpole_velocity_termination_threshold: float = 8.0
+    cartpole_angular_velocity_termination_threshold: float = 10.0
+    cartpole_reward_position_clip: float | None = None
 
 
 PRESETS = {
@@ -85,8 +101,59 @@ PRESETS = {
             env_id="CartpoleSwingupEnvLong-v0",
             horizon=1000,
             total_timesteps=300_000,
+            anneal_lr=True,
+            cost_gae_lambda=1.0,
+            redistribute_terminal_cost=False,
+            normalize_advantage_across_rollout=True,
+            initial_action_std=10.0,
+            lambda_lr=0.05,
             seed=42,
             output_dir=run_path / "artifacts" / "ppo_lagrangian_cartpole",
+        ),
+    ),
+    "cartpole-wide-600k": (
+        "PPO-Lagrangian on wide-bound 1000-step CartPole through 600k steps",
+        Args(
+            environment="cartpole",
+            env_id="CartpoleSwingupEnvLong-v0",
+            horizon=1000,
+            total_timesteps=600_000,
+            anneal_lr=True,
+            cost_gae_lambda=1.0,
+            redistribute_terminal_cost=False,
+            normalize_advantage_across_rollout=True,
+            initial_action_std=10.0,
+            lambda_lr=0.05,
+            seed=42,
+            output_dir=run_path / "artifacts" / "ppo_lagrangian_cartpole_wide_600k",
+            cartpole_terminate_on_out_of_bounds=True,
+            cartpole_position_termination_threshold=7.5,
+            cartpole_velocity_termination_threshold=12.0,
+            cartpole_angular_velocity_termination_threshold=15.0,
+            cartpole_reward_position_clip=5.0,
+        ),
+    ),
+    "cartpole-saturated-600k": (
+        "PPO-Lagrangian on nonterminating saturated 1000-step CartPole through 600k steps",
+        Args(
+            environment="cartpole",
+            env_id="CartpoleSwingupEnvLong-v0",
+            horizon=1000,
+            total_timesteps=600_000,
+            anneal_lr=True,
+            cost_gae_lambda=1.0,
+            redistribute_terminal_cost=False,
+            normalize_advantage_across_rollout=True,
+            initial_action_std=10.0,
+            lambda_lr=0.05,
+            seed=42,
+            output_dir=run_path / "artifacts" / "ppo_lagrangian_cartpole_saturated_600k",
+            cartpole_terminate_on_out_of_bounds=False,
+            cartpole_saturate_state_on_out_of_bounds=True,
+            cartpole_position_termination_threshold=7.5,
+            cartpole_velocity_termination_threshold=12.0,
+            cartpole_angular_velocity_termination_threshold=15.0,
+            cartpole_reward_position_clip=5.0,
         ),
     ),
 }
@@ -94,7 +161,9 @@ PRESETS = {
 
 def serializable_config(args: Args) -> dict[str, object]:
     config = asdict(args)
-    config["output_dir"] = str(config["output_dir"])
+    for key, value in config.items():
+        if isinstance(value, Path):
+            config[key] = str(value)
     return config
 
 
@@ -174,9 +243,33 @@ class TimeAwareObservation(gym.Wrapper):
         return self._augment(observation), reward, terminated, truncated, info
 
 
-def make_env(env_id: str, horizon: int, seed: int, index: int):
+def cartpole_env_kwargs(args: Args) -> dict[str, object]:
+    if args.env_id != "CartpoleSwingupEnvLong-v0":
+        return {}
+    return {
+        "terminate_on_out_of_bounds": args.cartpole_terminate_on_out_of_bounds,
+        "saturate_state_on_out_of_bounds": (
+            args.cartpole_saturate_state_on_out_of_bounds
+        ),
+        "position_termination_threshold": args.cartpole_position_termination_threshold,
+        "velocity_termination_threshold": args.cartpole_velocity_termination_threshold,
+        "angular_velocity_termination_threshold": (
+            args.cartpole_angular_velocity_termination_threshold
+        ),
+        "reward_position_clip": args.cartpole_reward_position_clip,
+    }
+
+
+def make_env(
+    env_id: str,
+    horizon: int,
+    seed: int,
+    index: int,
+    *,
+    env_kwargs: dict[str, object] | None = None,
+):
     def thunk():
-        env = gym.make(env_id, max_episode_steps=horizon)
+        env = gym.make(env_id, max_episode_steps=horizon, **(env_kwargs or {}))
         env = TimeAwareObservation(env, horizon)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed + index)
@@ -226,6 +319,64 @@ def terminal_costs(
     return costs
 
 
+def cartpole_cost_potential(observations: np.ndarray) -> np.ndarray:
+    """Return a bounded potential used only to redistribute terminal cost."""
+
+    physical = physical_observation(np.asarray(observations, dtype=np.float32))
+    x = physical[..., 0]
+    x_dot = physical[..., 1]
+    angle = np.arctan2(physical[..., 3], physical[..., 2])
+    theta_dot = physical[..., 4]
+    state_loss = (
+        0.5 * angle**2
+        + 0.5 * x**2
+        + 0.05 * theta_dot**2
+        + 0.05 * x_dot**2
+    )
+    return state_loss / (1.0 + state_loss)
+
+
+def transition_costs(
+    args: Args,
+    next_observations: np.ndarray,
+    episode_ends: np.ndarray,
+    infos: dict,
+    binary_terminal_costs: np.ndarray,
+    current_potentials: np.ndarray,
+    initial_potentials: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Redistribute binary episode cost without changing its episode sum."""
+
+    if not args.redistribute_terminal_cost:
+        return (
+            binary_terminal_costs.copy(),
+            np.zeros_like(current_potentials),
+            np.zeros_like(initial_potentials),
+        )
+    if args.env_id != "CartpoleSwingupEnvLong-v0":
+        raise ValueError("terminal-cost redistribution is implemented for CartPole")
+
+    final_observations = infos.get("final_observation")
+    successor_observations = np.asarray(next_observations, dtype=np.float32).copy()
+    if final_observations is not None:
+        for index, ended in enumerate(episode_ends):
+            if ended and final_observations[index] is not None:
+                successor_observations[index] = final_observations[index]
+    successor_potentials = cartpole_cost_potential(successor_observations)
+    reset_potentials = cartpole_cost_potential(next_observations)
+    redistributed = successor_potentials - current_potentials
+    for index, ended in enumerate(episode_ends):
+        if ended:
+            redistributed[index] = (
+                binary_terminal_costs[index]
+                - current_potentials[index]
+                + initial_potentials[index]
+            )
+            successor_potentials[index] = reset_potentials[index]
+            initial_potentials[index] = reset_potentials[index]
+    return redistributed.astype(np.float32), successor_potentials, initial_potentials
+
+
 def update_lagrange_multiplier(
     value: float,
     mean_episode_cost: float,
@@ -242,6 +393,22 @@ def update_lagrange_multiplier(
     )
 
 
+def record_episode_cost_for_dual(
+    episode_cost: float,
+    dual_active: bool,
+    pending_costs: list[float],
+    start_after_first_success: bool,
+) -> bool:
+    """Start dual updates once the sampled terminal costs are nonconstant."""
+
+    if not dual_active and start_after_first_success and episode_cost == 0.0:
+        dual_active = True
+        pending_costs.clear()
+    if dual_active:
+        pending_costs.append(episode_cost)
+    return dual_active
+
+
 def normalized_lagrangian_advantage(
     reward_advantage: torch.Tensor,
     cost_advantage: torch.Tensor,
@@ -253,6 +420,38 @@ def normalized_lagrangian_advantage(
     return combined
 
 
+def generalized_advantages(
+    deltas: torch.Tensor,
+    episode_ends: torch.Tensor,
+    trace_coefficient: float,
+) -> torch.Tensor:
+    """Propagate one-step residuals without crossing episode boundaries."""
+
+    advantages = torch.zeros_like(deltas)
+    last_advantage = torch.zeros(deltas.shape[1], device=deltas.device)
+    for step in reversed(range(len(deltas))):
+        nonterminal = 1.0 - episode_ends[step]
+        last_advantage = (
+            deltas[step]
+            + trace_coefficient * nonterminal * last_advantage
+        )
+        advantages[step] = last_advantage
+    return advantages
+
+
+def delayed_linear_learning_rate(
+    initial_rate: float,
+    update: int,
+    total_updates: int,
+    start_fraction: float,
+) -> float:
+    progress = (update - 1.0) / total_updates
+    if progress <= start_fraction:
+        return initial_rate
+    fraction_remaining = (1.0 - progress) / (1.0 - start_fraction)
+    return initial_rate * fraction_remaining
+
+
 def layer_init(layer: nn.Linear, std: float = math.sqrt(2), bias: float = 0.0):
     nn.init.orthogonal_(layer.weight, std)
     nn.init.constant_(layer.bias, bias)
@@ -260,8 +459,10 @@ def layer_init(layer: nn.Linear, std: float = math.sqrt(2), bias: float = 0.0):
 
 
 class Agent(nn.Module):
-    def __init__(self, envs: gym.vector.VectorEnv):
+    def __init__(self, envs: gym.vector.VectorEnv, initial_action_std: float = 1.0):
         super().__init__()
+        if initial_action_std <= 0.0:
+            raise ValueError("initial_action_std must be positive")
         observation_size = int(np.prod(envs.single_observation_space.shape))
         action_size = int(np.prod(envs.single_action_space.shape))
         self.reward_critic = nn.Sequential(
@@ -285,14 +486,15 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(64, action_size), std=0.01),
         )
-        self.actor_logstd = nn.Parameter(torch.zeros(1, action_size))
-        self.register_buffer(
-            "action_scale",
-            torch.as_tensor(
-                (envs.single_action_space.high - envs.single_action_space.low) / 2.0,
-                dtype=torch.float32,
-            ),
+        action_scale = torch.as_tensor(
+            (envs.single_action_space.high - envs.single_action_space.low) / 2.0,
+            dtype=torch.float32,
         )
+        initial_latent_std = torch.as_tensor(
+            initial_action_std, dtype=torch.float32
+        ) / action_scale
+        self.actor_logstd = nn.Parameter(initial_latent_std.log().reshape(1, -1))
+        self.register_buffer("action_scale", action_scale)
         self.register_buffer(
             "action_bias",
             torch.as_tensor(
@@ -347,6 +549,15 @@ class Agent(nn.Module):
     def deterministic_action(self, observation: torch.Tensor) -> torch.Tensor:
         return self.action_bias + self.action_scale * torch.tanh(
             self.actor_mean(observation)
+        )
+
+    @torch.no_grad()
+    def cap_action_std(self, maximum_action_std: float) -> None:
+        if maximum_action_std <= 0.0:
+            raise ValueError("maximum action standard deviation must be positive")
+        maximum_latent_std = maximum_action_std / self.action_scale
+        self.actor_logstd.copy_(
+            torch.minimum(self.actor_logstd, maximum_latent_std.log().reshape(1, -1))
         )
 
 
@@ -453,7 +664,12 @@ def evaluate(
     for episode in range(args.evaluation_episodes):
         trial_seed = args.evaluation_seed + episode
         env = TimeAwareObservation(
-            gym.make(args.env_id, max_episode_steps=args.horizon), args.horizon
+            gym.make(
+                args.env_id,
+                max_episode_steps=args.horizon,
+                **cartpole_env_kwargs(args),
+            ),
+            args.horizon,
         )
         observation, _ = env.reset(seed=trial_seed)
         if action_low is None:
@@ -463,6 +679,9 @@ def evaluate(
         episode_length = 0
         terminated = truncated = False
         final_info: dict = {}
+        first_goal_step: int | None = (
+            0 if reached_goal(args.env_id, observation) else None
+        )
         with torch.random.fork_rng(devices=fork_devices):
             torch.manual_seed(trial_seed)
             while not (terminated or truncated):
@@ -479,6 +698,10 @@ def evaluate(
                 )
                 episode_return += float(reward)
                 episode_length += 1
+                if first_goal_step is None and reached_goal(
+                    args.env_id, observation, final_info
+                ):
+                    first_goal_step = episode_length
         returns.append(episode_return)
         episode_cost = (
             0.0 if reached_goal(args.env_id, observation, final_info) else 1.0
@@ -492,7 +715,12 @@ def evaluate(
                 "episode_return": episode_return,
                 "episode_cost": episode_cost,
                 "goal_reached": not bool(episode_cost),
+                "goal_visited": first_goal_step is not None,
+                "first_goal_step": first_goal_step,
                 "episode_length": episode_length,
+                "terminated": bool(terminated),
+                "truncated": bool(truncated),
+                "final_observation": physical_observation(observation).tolist(),
             }
         )
         env.close()
@@ -546,6 +774,24 @@ def run_training(args: Args) -> None:
         raise ValueError("evaluation_episodes must be positive")
     if args.paired_evaluation_episodes <= 0:
         raise ValueError("paired_evaluation_episodes must be positive")
+    if args.save_model_every_steps <= 0:
+        raise ValueError("save_model_every_steps must be positive")
+    if args.env_id == "CartpoleSwingupEnvLong-v0":
+        for name, value in (
+            ("cartpole_position_termination_threshold", args.cartpole_position_termination_threshold),
+            ("cartpole_velocity_termination_threshold", args.cartpole_velocity_termination_threshold),
+            (
+                "cartpole_angular_velocity_termination_threshold",
+                args.cartpole_angular_velocity_termination_threshold,
+            ),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} must be positive")
+        if (
+            args.cartpole_reward_position_clip is not None
+            and args.cartpole_reward_position_clip <= 0
+        ):
+            raise ValueError("cartpole_reward_position_clip must be positive")
     if args.num_envs <= 0 or args.num_minibatches <= 0 or args.update_epochs <= 0:
         raise ValueError(
             "num_envs, num_minibatches, and update_epochs must be positive"
@@ -554,6 +800,15 @@ def run_training(args: Args) -> None:
         raise ValueError("gamma must lie in (0, 1]")
     if args.reward_scale <= 0.0:
         raise ValueError("reward_scale must be positive")
+    if args.initial_action_std <= 0.0:
+        raise ValueError("initial_action_std must be positive")
+    if (
+        args.max_action_std_after_first_success is not None
+        and args.max_action_std_after_first_success <= 0.0
+    ):
+        raise ValueError("max_action_std_after_first_success must be positive")
+    if not 0.0 <= args.anneal_lr_start_fraction < 1.0:
+        raise ValueError("anneal_lr_start_fraction must lie in [0, 1)")
     if not 0.0 <= args.lambda_init <= args.lambda_max:
         raise ValueError("lambda_init must lie in [0, lambda_max]")
     batch_size = args.num_envs * args.num_steps
@@ -574,13 +829,19 @@ def run_training(args: Args) -> None:
 
     envs = gym.vector.SyncVectorEnv(
         [
-            make_env(args.env_id, args.horizon, args.seed, index)
+            make_env(
+                args.env_id,
+                args.horizon,
+                args.seed,
+                index,
+                env_kwargs=cartpole_env_kwargs(args),
+            )
             for index in range(args.num_envs)
         ]
     )
     if not isinstance(envs.single_action_space, gym.spaces.Box):
         raise TypeError("PPO-Lagrangian currently supports continuous actions only")
-    agent = Agent(envs).to(device)
+    agent = Agent(envs, initial_action_std=args.initial_action_std).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     observation_shape = envs.single_observation_space.shape
@@ -601,15 +862,40 @@ def run_training(args: Args) -> None:
     lambda_value = float(args.lambda_init)
     completed_costs: list[float] = []
     pending_lambda_costs: list[float] = []
+    dual_active = not args.dual_start_after_first_success
+    dual_activation_step: int | None = 0 if dual_active else None
+    action_std_cap_active = bool(
+        dual_active and args.max_action_std_after_first_success is not None
+    )
     next_observation, _ = envs.reset(seed=args.seed)
     next_observation = torch.as_tensor(
         next_observation, dtype=torch.float32, device=device
     )
+    current_cost_potentials = (
+        cartpole_cost_potential(next_observation.cpu().numpy())
+        if args.redistribute_terminal_cost
+        else np.zeros(args.num_envs, dtype=np.float32)
+    )
+    initial_cost_potentials = current_cost_potentials.copy()
+    redistributed_episode_costs = np.zeros(args.num_envs, dtype=np.float64)
     started_at = time.time()
     total_updates = math.ceil(args.total_timesteps / batch_size)
+    checkpoint_dir = args.output_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    next_checkpoint_step = args.save_model_every_steps
 
     while global_step < args.total_timesteps:
         update += 1
+        if args.anneal_lr:
+            current_learning_rate = delayed_linear_learning_rate(
+                args.learning_rate,
+                update,
+                total_updates,
+                args.anneal_lr_start_fraction,
+            )
+            optimizer.param_groups[0]["lr"] = current_learning_rate
+        else:
+            current_learning_rate = args.learning_rate
         saturation_values: list[float] = []
         for step in range(args.num_steps):
             if global_step >= args.total_timesteps:
@@ -638,9 +924,21 @@ def run_training(args: Args) -> None:
                 env_action.cpu().numpy()
             )
             end_np = np.logical_or(terminated, truncated)
-            cost_np = terminal_costs(
+            binary_cost_np = terminal_costs(
                 args.env_id, next_obs_np, terminated, truncated, infos
             )
+            cost_np, current_cost_potentials, initial_cost_potentials = (
+                transition_costs(
+                    args,
+                    next_obs_np,
+                    end_np,
+                    infos,
+                    binary_cost_np,
+                    current_cost_potentials,
+                    initial_cost_potentials,
+                )
+            )
+            redistributed_episode_costs += cost_np
             rewards[step] = args.reward_scale * torch.as_tensor(
                 reward_np, device=device
             )
@@ -648,12 +946,49 @@ def run_training(args: Args) -> None:
             episode_ends[step] = torch.as_tensor(end_np, device=device)
             for index, ended in enumerate(end_np):
                 if ended:
-                    value = float(cost_np[index])
+                    value = float(binary_cost_np[index])
+                    if args.redistribute_terminal_cost and not np.isclose(
+                        redistributed_episode_costs[index], value, atol=1e-5
+                    ):
+                        raise AssertionError(
+                            "redistributed transition costs do not sum to the "
+                            "binary episode cost"
+                        )
+                    redistributed_episode_costs[index] = 0.0
                     completed_costs.append(value)
-                    pending_lambda_costs.append(value)
+                    was_dual_active = dual_active
+                    dual_active = record_episode_cost_for_dual(
+                        value,
+                        dual_active,
+                        pending_lambda_costs,
+                        args.dual_start_after_first_success,
+                    )
+                    if dual_active and not was_dual_active:
+                        dual_activation_step = global_step
             next_observation = torch.as_tensor(
                 next_obs_np, dtype=torch.float32, device=device
             )
+            if global_step >= next_checkpoint_step:
+                periodic_checkpoint = (
+                    checkpoint_dir / f"ppo_checkpoint_{global_step}_steps.pt"
+                )
+                save_checkpoint(
+                    periodic_checkpoint,
+                    args,
+                    agent,
+                    optimizer,
+                    lambda_value,
+                    global_step,
+                    observation_shape,
+                    action_shape,
+                )
+                if mlflow.active_run() is not None:
+                    mlflow.log_artifact(
+                        str(periodic_checkpoint), artifact_path="checkpoints"
+                    )
+                    mlflow.log_metric("checkpoint_step", global_step, step=global_step)
+                while next_checkpoint_step <= global_step:
+                    next_checkpoint_step += args.save_model_every_steps
 
         rollout_steps = min(
             args.num_steps,
@@ -663,10 +998,8 @@ def run_training(args: Args) -> None:
             break
         with torch.no_grad():
             next_reward_value, next_cost_value = agent.get_values(next_observation)
-        reward_advantages = torch.zeros_like(rewards[:rollout_steps])
-        cost_advantages = torch.zeros_like(costs[:rollout_steps])
-        last_reward_gae = torch.zeros(args.num_envs, device=device)
-        last_cost_gae = torch.zeros(args.num_envs, device=device)
+        reward_deltas = torch.zeros_like(rewards[:rollout_steps])
+        cost_deltas = torch.zeros_like(costs[:rollout_steps])
         for step in reversed(range(rollout_steps)):
             nonterminal = 1.0 - episode_ends[step]
             if step == rollout_steps - 1:
@@ -675,21 +1008,24 @@ def run_training(args: Args) -> None:
             else:
                 reward_value_next = reward_values[step + 1]
                 cost_value_next = cost_values[step + 1]
-            reward_delta = (
+            reward_deltas[step] = (
                 rewards[step]
                 + args.gamma * reward_value_next * nonterminal
                 - reward_values[step]
             )
-            cost_delta = costs[step] + cost_value_next * nonterminal - cost_values[step]
-            last_reward_gae = (
-                reward_delta
-                + args.gamma * args.gae_lambda * nonterminal * last_reward_gae
+            cost_deltas[step] = (
+                costs[step] + cost_value_next * nonterminal - cost_values[step]
             )
-            last_cost_gae = (
-                cost_delta + args.cost_gae_lambda * nonterminal * last_cost_gae
-            )
-            reward_advantages[step] = last_reward_gae
-            cost_advantages[step] = last_cost_gae
+        reward_advantages = generalized_advantages(
+            reward_deltas,
+            episode_ends[:rollout_steps],
+            args.gamma * args.gae_lambda,
+        )
+        cost_advantages = generalized_advantages(
+            cost_deltas,
+            episode_ends[:rollout_steps],
+            args.cost_gae_lambda,
+        )
         reward_returns = reward_advantages + reward_values[:rollout_steps]
         cost_returns = cost_advantages + cost_values[:rollout_steps]
 
@@ -702,6 +1038,15 @@ def run_training(args: Args) -> None:
         flat_cost_advantages = cost_advantages.reshape(-1)
         flat_reward_returns = reward_returns.reshape(-1)
         flat_cost_returns = cost_returns.reshape(-1)
+        flat_combined_advantages = (
+            normalized_lagrangian_advantage(
+                flat_reward_advantages,
+                flat_cost_advantages,
+                lambda_value,
+            )
+            if args.normalize_advantage_across_rollout
+            else None
+        )
         indices = np.arange(len(flat_observations))
         current_minibatch_size = min(minibatch_size, len(indices))
 
@@ -724,10 +1069,14 @@ def run_training(args: Args) -> None:
                     clip_fractions.append(
                         ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
                     )
-                combined_advantage = normalized_lagrangian_advantage(
-                    flat_reward_advantages[mb_indices],
-                    flat_cost_advantages[mb_indices],
-                    lambda_value,
+                combined_advantage = (
+                    flat_combined_advantages[mb_indices]
+                    if flat_combined_advantages is not None
+                    else normalized_lagrangian_advantage(
+                        flat_reward_advantages[mb_indices],
+                        flat_cost_advantages[mb_indices],
+                        lambda_value,
+                    )
                 )
                 policy_loss_unclipped = -combined_advantage * ratio
                 policy_loss_clipped = -combined_advantage * torch.clamp(
@@ -760,7 +1109,13 @@ def run_training(args: Args) -> None:
                 if not bool(torch.isfinite(gradient_norm)):
                     raise FloatingPointError("non-finite PPO gradient norm")
                 optimizer.step()
-            if args.target_kl is not None and approximate_kl > args.target_kl:
+                if action_std_cap_active:
+                    agent.cap_action_std(args.max_action_std_after_first_success)
+            if (
+                args.target_kl is not None
+                and dual_active
+                and approximate_kl > args.target_kl
+            ):
                 break
 
         while len(pending_lambda_costs) >= args.lambda_update_episodes:
@@ -774,6 +1129,13 @@ def run_training(args: Args) -> None:
                 args.lambda_lr,
                 args.lambda_max,
             )
+        if (
+            dual_active
+            and not action_std_cap_active
+            and args.max_action_std_after_first_success is not None
+        ):
+            agent.cap_action_std(args.max_action_std_after_first_success)
+            action_std_cap_active = True
         if update == 1 or update % 10 == 0 or update == total_updates:
             recent_cost = (
                 float(np.mean(completed_costs[-100:]))
@@ -783,15 +1145,27 @@ def run_training(args: Args) -> None:
             record = {
                 "step": global_step,
                 "lambda": lambda_value,
+                "dual_active": dual_active,
+                "dual_activation_step": dual_activation_step,
+                "learning_rate": current_learning_rate,
                 "recent_episode_cost": recent_cost,
                 "clip_fraction": float(np.mean(clip_fractions)),
                 "approximate_kl": float(approximate_kl.item()),
                 "policy_loss": float(policy_loss.item()),
                 "reward_value_loss": float(reward_value_loss.item()),
                 "cost_value_loss": float(cost_value_loss.item()),
+                "reward_advantage_std": float(flat_reward_advantages.std().item()),
+                "cost_advantage_std": float(flat_cost_advantages.std().item()),
+                "cost_advantage_abs_mean": float(
+                    flat_cost_advantages.abs().mean().item()
+                ),
                 "gradient_norm": float(gradient_norm.item()),
                 "completed_episodes": len(completed_costs),
                 "action_saturation_fraction": float(np.mean(saturation_values)),
+                "latent_action_std": float(agent.actor_logstd.exp().mean().item()),
+                "approximate_action_std": float(
+                    (agent.actor_logstd.exp() * agent.action_scale).mean().item()
+                ),
                 "sps": int(global_step / max(time.time() - started_at, 1e-9)),
             }
             append_jsonl(metrics_path, record)
@@ -799,9 +1173,7 @@ def run_training(args: Args) -> None:
             print(json.dumps(record), flush=True)
 
     envs.close()
-    checkpoint_path = (
-        args.output_dir / f"ppo_lagrangian_{args.environment}_seed{args.seed}.pt"
-    )
+    checkpoint_path = checkpoint_dir / f"ppo_checkpoint_{global_step}_steps.pt"
     save_checkpoint(
         checkpoint_path,
         args,
@@ -812,6 +1184,9 @@ def run_training(args: Args) -> None:
         observation_shape,
         action_shape,
     )
+    if mlflow.active_run() is not None:
+        mlflow.log_artifact(str(checkpoint_path), artifact_path="checkpoints")
+        mlflow.log_metric("checkpoint_step", global_step, step=global_step)
     evaluation = evaluate(agent, args, device, stochastic=True)
     deterministic_evaluation = evaluate(agent, args, device, stochastic=False)
     paired_args = replace(
@@ -827,6 +1202,8 @@ def run_training(args: Args) -> None:
     ):
         raise AssertionError("episode cost and goal-reaching probability disagree")
     evaluation["lambda"] = lambda_value
+    evaluation["dual_active"] = dual_active
+    evaluation["dual_activation_step"] = dual_activation_step
     evaluation["cost_limit"] = args.cost_limit
     evaluation["reward_scale"] = args.reward_scale
     evaluation["constraint_satisfied_empirically"] = bool(
@@ -868,9 +1245,65 @@ def run_training(args: Args) -> None:
     print(json.dumps(evaluation, indent=2), flush=True)
 
 
+def run_evaluation_only(args: Args) -> None:
+    """Evaluate a saved policy twice without changing the checkpoint."""
+
+    if args.evaluation_checkpoint is None:
+        raise ValueError("evaluation_checkpoint is required")
+    checkpoint_path = args.evaluation_checkpoint.resolve()
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(checkpoint_path)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    device = torch.device(args.device)
+    envs = gym.vector.SyncVectorEnv(
+        [
+            make_env(
+                args.env_id,
+                args.horizon,
+                args.seed,
+                index=0,
+                env_kwargs=cartpole_env_kwargs(args),
+            )
+        ]
+    )
+    try:
+        agent = Agent(envs, initial_action_std=args.initial_action_std).to(device)
+        payload = load_agent_checkpoint(
+            checkpoint_path,
+            args,
+            agent,
+            envs.single_observation_space.shape,
+            envs.single_action_space.shape,
+            device,
+        )
+    finally:
+        envs.close()
+    stochastic = evaluate(agent, args, device, stochastic=True)
+    deterministic = evaluate(agent, args, device, stochastic=False)
+    result = {
+        "evaluation_only": True,
+        "checkpoint_path": str(checkpoint_path),
+        "checkpoint_sha256": hashlib.sha256(checkpoint_path.read_bytes()).hexdigest(),
+        "checkpoint_global_step": payload.get("global_step"),
+        "checkpoint_lambda": payload.get("lambda"),
+        "stochastic_evaluation": stochastic,
+        "deterministic_evaluation": deterministic,
+        "config": serializable_config(args),
+        "runtime": source_metadata(),
+    }
+    result_path = args.output_dir / "ppo_lagrangian_checkpoint_evaluation.json"
+    result_path.write_text(json.dumps(result, indent=2) + "\n")
+    if mlflow.active_run() is not None:
+        log_mlflow_metrics(stochastic, int(payload.get("global_step", 0)), "evaluation/stochastic")
+        log_mlflow_metrics(deterministic, int(payload.get("global_step", 0)), "evaluation/deterministic")
+        mlflow.log_artifact(str(result_path), artifact_path="outputs")
+    print(json.dumps(result, indent=2), flush=True)
+
+
 def main(args: Args) -> None:
+    operation = run_evaluation_only if args.evaluation_checkpoint else run_training
     if args.mlflow_tracking_uri is None:
-        run_training(args)
+        operation(args)
         return
     mlflow.set_tracking_uri(args.mlflow_tracking_uri)
     mlflow.set_experiment(args.mlflow_experiment_name)
@@ -894,7 +1327,7 @@ def main(args: Args) -> None:
         parameters.pop("mlflow_tracking_uri", None)
         mlflow.log_params(parameters)
         try:
-            run_training(args)
+            operation(args)
         except BaseException as error:
             mlflow.set_tags(
                 {

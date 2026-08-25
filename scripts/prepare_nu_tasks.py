@@ -10,12 +10,20 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from scripts.run_checkpoint_matrix import Task, prepare_tasks, write_tasks
+from scripts.run_checkpoint_matrix import (
+    Task,
+    discover_checkpoints,
+    prepare_tasks,
+    write_tasks,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CHECKPOINT_PROTOCOL = REPO_ROOT / "experiments" / "checkpoint-sweep-v1.json"
 DEFAULT_NU_PROTOCOL = REPO_ROOT / "experiments" / "nu-ablation-v1.json"
+DEFAULT_THRESHOLD_SWEEP_PROTOCOL = (
+    REPO_ROOT / "experiments" / "nu-threshold-sweep-v1.json"
+)
 
 
 def read_calibrations(path: Path) -> list[dict[str, Any]]:
@@ -205,16 +213,125 @@ def infinity_ablation_tasks(
     return tasks
 
 
+def threshold_sweep_tasks(
+    protocol: dict[str, Any],
+    *,
+    artifacts_root: Path,
+    matrix_id: str,
+) -> list[Task]:
+    """Prepare a conservative-mode nu sweep over fixed checkpoint stages."""
+
+    evaluation = protocol["evaluation"]
+    multipliers = [
+        float("inf") if value == "infinity" else float(value)
+        for value in protocol["threshold_sweep"]["multipliers"]
+    ]
+    if not multipliers or any(value <= 0 for value in multipliers):
+        raise ValueError("nu multipliers must be positive")
+    if not any(value == float("inf") for value in multipliers):
+        raise ValueError("nu threshold sweep must include infinity")
+
+    tasks = []
+    for preset, config in protocol["environments"].items():
+        nominal_nu = float(config["nominal_nu"])
+        if nominal_nu <= 0:
+            raise ValueError(f"nominal nu for {preset} must be positive")
+        selected_seed = int(config["training_seed"])
+        stages = {int(step): stage for stage, step in config["checkpoint_stages"].items()}
+        checkpoints = discover_checkpoints(config, artifacts_root)
+        selected = [
+            item
+            for item in checkpoints
+            if item[0] == selected_seed and item[1] in stages
+        ]
+        found_steps = {step for _, step, _ in selected}
+        missing = set(stages) - found_steps
+        if missing:
+            raise RuntimeError(
+                f"missing selected checkpoints for {preset} seed {selected_seed}: "
+                f"{sorted(missing)}"
+            )
+        for seed, step, path in selected:
+            stage = stages[step]
+            for multiplier in multipliers:
+                if multiplier == float("inf"):
+                    label = "infinity"
+                    threshold = float("inf")
+                else:
+                    label = f"{multiplier:g}x".replace(".", "p")
+                    threshold = nominal_nu * multiplier
+                tasks.append(
+                    Task(
+                        task_id=(
+                            f"{preset}__s{seed}__t{step}__{stage}__nu_{label}"
+                        ),
+                        matrix_id=matrix_id,
+                        environment=preset,
+                        preset=preset,
+                        env_id=config["env_id"],
+                        algorithm=config["algorithm"],
+                        training_seed=seed,
+                        checkpoint_step=step,
+                        checkpoint_path=str(path),
+                        mode=f"nu_{label}",
+                        eval_mode="calf_wrapper",
+                        calf_mode="conservative",
+                        evaluation_seed=int(evaluation["evaluation_seed"]),
+                        n_envs=int(evaluation["trials"]),
+                        calf_change_rate=threshold,
+                        nu_calibration_rule="reward_local_goal_span",
+                        checkpoint_stage=stage,
+                        nu_multiplier=multiplier,
+                        cartpole_terminate_on_out_of_bounds=config.get(
+                            "cartpole_terminate_on_out_of_bounds"
+                        ),
+                        cartpole_saturate_state_on_out_of_bounds=config.get(
+                            "cartpole_saturate_state_on_out_of_bounds"
+                        ),
+                        cartpole_position_termination_threshold=config.get(
+                            "cartpole_position_termination_threshold"
+                        ),
+                        cartpole_velocity_termination_threshold=config.get(
+                            "cartpole_velocity_termination_threshold"
+                        ),
+                        cartpole_angular_velocity_termination_threshold=config.get(
+                            "cartpole_angular_velocity_termination_threshold"
+                        ),
+                        cartpole_fallback_gain_pos=config.get(
+                            "cartpole_fallback_gain_pos"
+                        ),
+                        cartpole_fallback_action_limit=config.get(
+                            "cartpole_fallback_action_limit"
+                        ),
+                        cartpole_fallback_pd_scale=config.get(
+                            "cartpole_fallback_pd_scale"
+                        ),
+                        cartpole_fallback_action_bias=config.get(
+                            "cartpole_fallback_action_bias"
+                        ),
+                    )
+                )
+    return tasks
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("sensitivity", "full", "infinity-ablation"))
-    parser.add_argument("--calibration-csv", type=Path, required=True)
+    parser.add_argument(
+        "command",
+        choices=("sensitivity", "full", "infinity-ablation", "threshold-sweep"),
+    )
+    parser.add_argument("--calibration-csv", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--matrix-id", required=True)
     parser.add_argument(
         "--checkpoint-protocol", type=Path, default=DEFAULT_CHECKPOINT_PROTOCOL
     )
     parser.add_argument("--nu-protocol", type=Path, default=DEFAULT_NU_PROTOCOL)
+    parser.add_argument(
+        "--threshold-sweep-protocol",
+        type=Path,
+        default=DEFAULT_THRESHOLD_SWEEP_PROTOCOL,
+    )
     parser.add_argument("--artifacts-root", type=Path)
     parser.add_argument("--selected-n", type=float)
     parser.add_argument("--selected-rule")
@@ -230,6 +347,27 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.command == "threshold-sweep":
+        if args.artifacts_root is None:
+            raise ValueError("threshold-sweep requires --artifacts-root")
+        tasks = threshold_sweep_tasks(
+            json.loads(args.threshold_sweep_protocol.read_text()),
+            artifacts_root=args.artifacts_root,
+            matrix_id=args.matrix_id,
+        )
+        write_tasks(tasks, args.output)
+        print(
+            json.dumps(
+                {
+                    "matrix_id": args.matrix_id,
+                    "tasks": len(tasks),
+                    "output": str(args.output),
+                }
+            )
+        )
+        return 0
+    if args.calibration_csv is None:
+        raise ValueError(f"{args.command} requires --calibration-csv")
     rows = read_calibrations(args.calibration_csv)
     nu_protocol = json.loads(args.nu_protocol.read_text())
     development = nu_protocol["development_evaluation"]

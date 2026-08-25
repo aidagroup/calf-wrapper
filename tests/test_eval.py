@@ -2,7 +2,8 @@ import numpy as np
 import torch
 from stable_baselines3.common.env_util import make_vec_env
 
-from run.eval import goal_reaching_mask, run_episode, trial_successes
+from run.eval import run_episode, trial_successes
+from src.goal_reaching import goal_neighborhood_mask, goal_reaching_mask
 from src.models.cleanrl_td3 import CleanRLActor, CleanRLQNetwork, CleanRLTD3
 
 
@@ -72,6 +73,20 @@ def test_goal_reaching_mask_supports_added_environments():
     np.testing.assert_array_equal(
         goal_reaching_mask("RobotNavigationConstSpeedCatch-v0", robot_observations),
         [True, False],
+    )
+
+
+def test_auv_goal_neighborhood_uses_distance_to_goal_set():
+    observations = np.array(
+        [
+            [0.0, 3.85, 1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.4, 3.85, 1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.5, 3.85, 1.0, 0.0, 0.0, 0.0, 0.0],
+        ]
+    )
+    np.testing.assert_array_equal(
+        goal_neighborhood_mask("UnderwaterDrone-v0", observations, 0.16),
+        [True, True, False],
     )
 
 

@@ -59,6 +59,17 @@ class Task:
     calf_change_rate: float | None = None
     nu_calibration_n: float | None = None
     nu_calibration_rule: str | None = None
+    checkpoint_stage: str | None = None
+    nu_multiplier: float | None = None
+    cartpole_terminate_on_out_of_bounds: bool | None = None
+    cartpole_saturate_state_on_out_of_bounds: bool | None = None
+    cartpole_position_termination_threshold: float | None = None
+    cartpole_velocity_termination_threshold: float | None = None
+    cartpole_angular_velocity_termination_threshold: float | None = None
+    cartpole_fallback_gain_pos: float | None = None
+    cartpole_fallback_action_limit: float | None = None
+    cartpole_fallback_pd_scale: float | None = None
+    cartpole_fallback_action_bias: float | None = None
 
 
 def checkpoint_step(path: Path) -> int:
@@ -224,6 +235,59 @@ def read_tasks(path: Path) -> list[Task]:
                             else None
                         ),
                         "nu_calibration_rule": row.get("nu_calibration_rule") or None,
+                        "checkpoint_stage": row.get("checkpoint_stage") or None,
+                        "nu_multiplier": (
+                            float(row["nu_multiplier"])
+                            if row.get("nu_multiplier")
+                            else None
+                        ),
+                        "cartpole_terminate_on_out_of_bounds": (
+                            row["cartpole_terminate_on_out_of_bounds"].lower()
+                            == "true"
+                            if row.get("cartpole_terminate_on_out_of_bounds")
+                            else None
+                        ),
+                        "cartpole_saturate_state_on_out_of_bounds": (
+                            row["cartpole_saturate_state_on_out_of_bounds"].lower()
+                            == "true"
+                            if row.get("cartpole_saturate_state_on_out_of_bounds")
+                            else None
+                        ),
+                        "cartpole_position_termination_threshold": (
+                            float(row["cartpole_position_termination_threshold"])
+                            if row.get("cartpole_position_termination_threshold")
+                            else None
+                        ),
+                        "cartpole_velocity_termination_threshold": (
+                            float(row["cartpole_velocity_termination_threshold"])
+                            if row.get("cartpole_velocity_termination_threshold")
+                            else None
+                        ),
+                        "cartpole_angular_velocity_termination_threshold": (
+                            float(row["cartpole_angular_velocity_termination_threshold"])
+                            if row.get("cartpole_angular_velocity_termination_threshold")
+                            else None
+                        ),
+                        "cartpole_fallback_gain_pos": (
+                            float(row["cartpole_fallback_gain_pos"])
+                            if row.get("cartpole_fallback_gain_pos")
+                            else None
+                        ),
+                        "cartpole_fallback_action_limit": (
+                            float(row["cartpole_fallback_action_limit"])
+                            if row.get("cartpole_fallback_action_limit")
+                            else None
+                        ),
+                        "cartpole_fallback_pd_scale": (
+                            float(row["cartpole_fallback_pd_scale"])
+                            if row.get("cartpole_fallback_pd_scale")
+                            else None
+                        ),
+                        "cartpole_fallback_action_bias": (
+                            float(row["cartpole_fallback_action_bias"])
+                            if row.get("cartpole_fallback_action_bias")
+                            else None
+                        ),
                     }
                 )
             )
@@ -271,6 +335,8 @@ def evaluation_command(
         command.extend(["--training-seed", str(task.training_seed)])
     if task.checkpoint_step is not None:
         command.extend(["--checkpoint-step", str(task.checkpoint_step)])
+    if task.checkpoint_stage is not None:
+        command.extend(["--checkpoint-stage", task.checkpoint_stage])
     if task.calf_mode != "custom":
         command.extend(["--calf.mode", task.calf_mode])
     if task.calf_change_rate is not None:
@@ -279,6 +345,77 @@ def evaluation_command(
         command.extend(["--nu-calibration-n", str(task.nu_calibration_n)])
     if task.nu_calibration_rule is not None:
         command.extend(["--nu-calibration-rule", task.nu_calibration_rule])
+    if task.nu_multiplier is not None:
+        command.extend(["--nu-multiplier", str(task.nu_multiplier)])
+    if task.cartpole_terminate_on_out_of_bounds:
+        command.append("--cartpole-terminate-on-out-of-bounds")
+    if task.cartpole_saturate_state_on_out_of_bounds:
+        command.append("--cartpole-saturate-state-on-out-of-bounds")
+    for option, value in (
+        (
+            "--cartpole-position-termination-threshold",
+            task.cartpole_position_termination_threshold,
+        ),
+        (
+            "--cartpole-velocity-termination-threshold",
+            task.cartpole_velocity_termination_threshold,
+        ),
+        (
+            "--cartpole-angular-velocity-termination-threshold",
+            task.cartpole_angular_velocity_termination_threshold,
+        ),
+    ):
+        if value is not None:
+            command.extend([option, str(value)])
+    if (
+        task.cartpole_fallback_gain_pos is not None
+        or task.cartpole_fallback_action_limit is not None
+        or task.cartpole_fallback_pd_scale is not None
+        or task.cartpole_fallback_action_bias is not None
+    ):
+        gain_pos = (
+            task.cartpole_fallback_gain_pos
+            if task.cartpole_fallback_gain_pos is not None
+            else 0.8
+        )
+        action_limit = (
+            task.cartpole_fallback_action_limit
+            if task.cartpole_fallback_action_limit is not None
+            else 10.0
+        )
+        pd_scale = (
+            task.cartpole_fallback_pd_scale
+            if task.cartpole_fallback_pd_scale is not None
+            else 1.0
+        )
+        command.extend(
+            [
+                "--stabilizing-policy.pd-coefs",
+                *(str(value * pd_scale) for value in (77.76, 8.07, 20.72, 11.18)),
+                "--stabilizing-policy.gain",
+                "2.2",
+                "--stabilizing-policy.gain-pos-vel",
+                "0.6",
+                "--stabilizing-policy.gain-pos",
+                str(gain_pos),
+                "--stabilizing-policy.swing-position-reference-gain",
+                "4.10",
+                "--stabilizing-policy.switch-loc",
+                "0.82",
+                "--stabilizing-policy.blend-width",
+                "0.05",
+                "--stabilizing-policy.velocity-brake-threshold",
+                "4.5",
+                "--stabilizing-policy.velocity-brake-position-threshold",
+                "0.75",
+                "--stabilizing-policy.action-min",
+                str(-action_limit),
+                "--stabilizing-policy.action-max",
+                str(action_limit),
+                "--stabilizing-policy.action-bias",
+                str(task.cartpole_fallback_action_bias or 0.0),
+            ]
+        )
     return command
 
 
@@ -385,6 +522,7 @@ def flatten_result(result: dict[str, Any]) -> dict[str, Any]:
             "checkpoint_step",
             "nu_calibration_n",
             "nu_calibration_rule",
+            "nu_multiplier",
             "eval_mode",
             "checkpoint_stage",
             "evaluation_seed",

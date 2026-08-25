@@ -84,6 +84,56 @@ def test_task_command_can_override_nu(tmp_path):
     assert command[command.index("--nu-calibration-n") + 1] == "10"
 
 
+def test_task_command_records_threshold_sweep_metadata(tmp_path):
+    add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", [3000])
+    task = prepare_tasks(
+        protocol(), tmp_path, "matrix", ["pendulum"], ["conservative"]
+    )[0]
+    task = task.__class__(
+        **{**task.__dict__, "checkpoint_stage": "early", "nu_multiplier": float("inf")}
+    )
+
+    command = evaluation_command(
+        task,
+        tracking_uri="http://tracking",
+        experiment_prefix="sweep",
+        device="cuda:0",
+        result_path=tmp_path / "result.json",
+    )
+
+    assert command[command.index("--checkpoint-stage") + 1] == "early"
+    assert command[command.index("--nu-multiplier") + 1] == "inf"
+
+
+def test_task_command_records_cartpole_termination_configuration(tmp_path):
+    add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", [3000])
+    task = prepare_tasks(
+        protocol(), tmp_path, "matrix", ["pendulum"], ["conservative"]
+    )[0]
+    task = task.__class__(
+        **{
+            **task.__dict__,
+            "cartpole_terminate_on_out_of_bounds": True,
+            "cartpole_position_termination_threshold": 7.5,
+            "cartpole_velocity_termination_threshold": 12.0,
+            "cartpole_angular_velocity_termination_threshold": 15.0,
+        }
+    )
+
+    command = evaluation_command(
+        task,
+        tracking_uri="http://tracking",
+        experiment_prefix="sweep",
+        device="cpu",
+        result_path=tmp_path / "result.json",
+    )
+
+    assert "--cartpole-terminate-on-out-of-bounds" in command
+    assert command[command.index("--cartpole-position-termination-threshold") + 1] == "7.5"
+    assert command[command.index("--cartpole-velocity-termination-threshold") + 1] == "12.0"
+    assert command[command.index("--cartpole-angular-velocity-termination-threshold") + 1] == "15.0"
+
+
 def test_prepare_tasks_applies_environment_specific_nu_only_to_wrapper(tmp_path):
     add_checkpoints(tmp_path, "ppo_Pendulum-v1_1", "zip", [3000])
     configured = protocol()

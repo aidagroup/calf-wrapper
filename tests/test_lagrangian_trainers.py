@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 from pathlib import Path
 
 import gymnasium as gym
@@ -80,6 +81,20 @@ def test_lagrange_multiplier_moves_in_constraint_direction(module):
     assert projected == 0.0
 
 
+def test_ppo_sparse_cost_warm_start_activates_on_first_success():
+    pending: list[float] = []
+    active = False
+    for _ in range(5):
+        active = ppo_lag.record_episode_cost_for_dual(1.0, active, pending, True)
+    assert not active
+    assert pending == []
+    active = ppo_lag.record_episode_cost_for_dual(0.0, active, pending, True)
+    assert active
+    assert pending == [0.0]
+    active = ppo_lag.record_episode_cost_for_dual(1.0, active, pending, True)
+    assert pending == [0.0, 1.0]
+
+
 @pytest.mark.parametrize("module", [ppo_lag, td3_lag])
 def test_exact_failure_upper_bound_is_stricter_than_point_estimate(module):
     upper = module.clopper_pearson_failure_upper(0, 30)
@@ -120,6 +135,44 @@ def test_ppo_squashed_policy_is_bounded_and_log_probability_reproducible():
     assert torch.isfinite(log_probability).all()
     torch.testing.assert_close(action, repeated_action)
     torch.testing.assert_close(log_probability, repeated_log_probability)
+    envs.close()
+
+
+def test_ppo_initial_action_std_is_expressed_in_environment_units():
+    envs = gym.vector.SyncVectorEnv(
+        [
+            ppo_lag.make_env(
+                "CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0
+            )
+        ]
+    )
+    agent = ppo_lag.Agent(envs, initial_action_std=1.0)
+    torch.testing.assert_close(
+        agent.actor_logstd.exp() * agent.action_scale,
+        torch.ones_like(agent.action_scale).reshape(1, -1),
+    )
+    envs.close()
+
+
+def test_ppo_action_std_cap_is_expressed_in_environment_units():
+    envs = gym.vector.SyncVectorEnv(
+        [
+            ppo_lag.make_env(
+                "CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0
+            )
+        ]
+    )
+    agent = ppo_lag.Agent(envs, initial_action_std=10.0)
+    agent.cap_action_std(2.0)
+    torch.testing.assert_close(
+        agent.actor_logstd.exp() * agent.action_scale,
+        2.0 * torch.ones_like(agent.action_scale).reshape(1, -1),
+    )
+    agent.cap_action_std(5.0)
+    torch.testing.assert_close(
+        agent.actor_logstd.exp() * agent.action_scale,
+        2.0 * torch.ones_like(agent.action_scale).reshape(1, -1),
+    )
     envs.close()
 
 
@@ -279,6 +332,77 @@ def test_ppo_primal_advantage_penalizes_the_higher_cost_action():
         reward_advantage, cost_advantage, lambda_value=1.0
     )
     assert combined[0] > combined[1]
+
+
+def test_undiscounted_cost_trace_propagates_terminal_failure_over_long_horizon():
+    deltas = torch.zeros((1000, 1))
+    deltas[-1] = 1.0
+    episode_ends = torch.zeros_like(deltas)
+    episode_ends[-1] = 1.0
+    monte_carlo = ppo_lag.generalized_advantages(deltas, episode_ends, 1.0)
+    truncated_trace = ppo_lag.generalized_advantages(deltas, episode_ends, 0.95)
+    assert monte_carlo[0].item() == pytest.approx(1.0)
+    assert truncated_trace[-101].item() == pytest.approx(0.95**100, rel=2e-6)
+    assert truncated_trace[0].item() < 1e-20
+
+
+def test_cartpole_saturated_preset_uses_nonterminating_saturated_environment():
+    args = ppo_lag.PRESETS["cartpole-saturated-600k"][1]
+    kwargs = ppo_lag.cartpole_env_kwargs(args)
+    assert kwargs["terminate_on_out_of_bounds"] is False
+    assert kwargs["saturate_state_on_out_of_bounds"] is True
+    assert kwargs["position_termination_threshold"] == pytest.approx(7.5)
+    assert kwargs["velocity_termination_threshold"] == pytest.approx(12.0)
+    assert kwargs["angular_velocity_termination_threshold"] == pytest.approx(15.0)
+    assert kwargs["reward_position_clip"] == pytest.approx(5.0)
+
+
+@pytest.mark.parametrize("terminal_cost", [0.0, 1.0])
+def test_cartpole_cost_redistribution_preserves_binary_episode_sum(terminal_cost):
+    args = dataclasses.replace(
+        ppo_lag.PRESETS["cartpole"][1], redistribute_terminal_cost=True
+    )
+    initial_observation = np.array([[0.4, -0.2, -1.0, 0.0, 0.3, 0.0]])
+    current = ppo_lag.cartpole_cost_potential(initial_observation)
+    initial = current.copy()
+    total = 0.0
+    for step in range(10):
+        angle = np.pi * (1.0 - (step + 1) / 10.0)
+        successor = np.array(
+            [[0.4 - 0.04 * step, 0.0, np.cos(angle), np.sin(angle), 0.0, 0.1]]
+        )
+        ended = np.array([step == 9])
+        infos = {"final_observation": np.array([successor[0]], dtype=object)}
+        costs, current, initial = ppo_lag.transition_costs(
+            args,
+            successor,
+            ended,
+            infos,
+            np.array([terminal_cost if ended[0] else 0.0], dtype=np.float32),
+            current,
+            initial,
+        )
+        total += float(costs[0])
+    assert total == pytest.approx(terminal_cost, abs=1e-6)
+
+
+def test_combined_advantage_normalization_is_rollout_global():
+    rewards = torch.tensor([3.0, 1.0, -2.0, 0.5])
+    costs = torch.tensor([0.0, 1.0, 0.2, 0.8])
+    combined = ppo_lag.normalized_lagrangian_advantage(rewards, costs, 0.7)
+    first_partition = combined[torch.tensor([0, 2])]
+    second_partition = combined[torch.tensor([1, 3])]
+    reconstructed = torch.empty_like(combined)
+    reconstructed[torch.tensor([0, 2])] = first_partition
+    reconstructed[torch.tensor([1, 3])] = second_partition
+    torch.testing.assert_close(reconstructed, combined)
+
+
+def test_cartpole_learning_rate_anneals_only_after_discovery_phase():
+    schedule = ppo_lag.delayed_linear_learning_rate
+    assert schedule(1e-3, 1, 100, 0.5) == pytest.approx(1e-3)
+    assert schedule(1e-3, 51, 100, 0.5) == pytest.approx(1e-3)
+    assert schedule(1e-3, 100, 100, 0.5) == pytest.approx(2e-5)
 
 
 def test_feasible_and_violating_batches_drive_projected_dual_response():

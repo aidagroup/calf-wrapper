@@ -32,6 +32,24 @@ class ExperimentConfig:
     env_id: str = "Pendulum-v1"
     """Gym environment ID to train on"""
 
+    position_termination_threshold: float | None = None
+    """Optional CartPole absolute position termination threshold"""
+
+    velocity_termination_threshold: float | None = None
+    """Optional CartPole absolute cart-velocity termination threshold"""
+
+    angular_velocity_termination_threshold: float | None = None
+    """Optional CartPole absolute angular-velocity termination threshold"""
+
+    reward_position_clip: float | None = None
+    """Optional CartPole position magnitude used in the reward"""
+
+    terminate_on_out_of_bounds: bool | None = None
+    """Optional CartPole termination behavior"""
+
+    saturate_state_on_out_of_bounds: bool | None = None
+    """Optional CartPole state saturation at the configured bounds"""
+
     n_envs: int = 1
     """Number of environments for vectorized training. Higher values increase training throughput"""
 
@@ -46,6 +64,9 @@ class ExperimentConfig:
 
     learning_rate: float = 1e-3
     """Learning rate for the optimizer. Controls step size during gradient updates"""
+
+    final_learning_rate: float | None = None
+    """Optional final learning rate for a linear schedule over the full run"""
 
     verbose: int = 1
     """Verbosity level: 0=no output, 1=info, 2=debug"""
@@ -115,24 +136,141 @@ presets = {
             ),
         ),
     ),
+    "cartpole-long-wide": (
+        "Training of PPO on the 1000-step CartPole task with 1.5x bounds",
+        ExperimentConfig(
+            env_id="CartpoleSwingupEnvLong-v0",
+            position_termination_threshold=7.5,
+            velocity_termination_threshold=12.0,
+            angular_velocity_termination_threshold=15.0,
+            reward_position_clip=5.0,
+            total_timesteps=1_000_000,
+            n_steps=2048,
+            n_envs=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            learning_rate=1e-3,
+            verbose=1,
+            seed=42,
+            device="cuda:0",
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+                experiment_name="ppo_cartpole_long_wide_train",
+                run_name="ppo_cartpole_long_wide_seed_42",
+            ),
+        ),
+    ),
+    "cartpole-long-wide-600k-annealed": (
+        "Training of PPO on wide-bound CartPole with a stabilizing LR schedule",
+        ExperimentConfig(
+            env_id="CartpoleSwingupEnvLong-v0",
+            position_termination_threshold=7.5,
+            velocity_termination_threshold=12.0,
+            angular_velocity_termination_threshold=15.0,
+            reward_position_clip=5.0,
+            total_timesteps=600_000,
+            n_steps=2048,
+            n_envs=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            learning_rate=1e-3,
+            final_learning_rate=1e-5,
+            verbose=1,
+            seed=42,
+            device="cuda:0",
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+                experiment_name="ppo_cartpole_long_wide_600k_annealed_train",
+                run_name="ppo_cartpole_long_wide_600k_annealed_seed_42",
+            ),
+        ),
+    ),
+    "cartpole-long-saturated-600k-annealed": (
+        "Training PPO on nonterminating CartPole with saturated state bounds",
+        ExperimentConfig(
+            env_id="CartpoleSwingupEnvLong-v0",
+            position_termination_threshold=7.5,
+            velocity_termination_threshold=12.0,
+            angular_velocity_termination_threshold=15.0,
+            reward_position_clip=5.0,
+            terminate_on_out_of_bounds=False,
+            saturate_state_on_out_of_bounds=True,
+            total_timesteps=600_000,
+            n_steps=2048,
+            n_envs=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            learning_rate=1e-3,
+            final_learning_rate=1e-5,
+            verbose=1,
+            seed=42,
+            device="cuda:0",
+            mlflow=MlflowConfig(
+                tracking_uri="file://" + os.path.join(str(run_path), "mlruns"),
+                experiment_name="ppo_cartpole_long_saturated_600k_annealed_train",
+                run_name="ppo_cartpole_long_saturated_600k_annealed_seed_42",
+            ),
+        ),
+    ),
 }
+
+
+def linear_learning_rate(initial: float, final: float):
+    """Return an SB3 schedule parameterized by remaining training progress."""
+
+    if initial <= 0 or final <= 0:
+        raise ValueError("learning rates must be positive")
+    if final > initial:
+        raise ValueError("final learning rate must not exceed initial learning rate")
+
+    def schedule(progress_remaining: float) -> float:
+        return final + (initial - final) * progress_remaining
+
+    return schedule
 
 
 @mlflow_monitoring()
 def main(config: ExperimentConfig):
     # Create the environment
-    env = make_vec_env(config.env_id, n_envs=config.n_envs, seed=config.seed)
+    optional_env_kwargs = {
+        "position_termination_threshold": config.position_termination_threshold,
+        "velocity_termination_threshold": config.velocity_termination_threshold,
+        "angular_velocity_termination_threshold": (
+            config.angular_velocity_termination_threshold
+        ),
+        "reward_position_clip": config.reward_position_clip,
+        "terminate_on_out_of_bounds": config.terminate_on_out_of_bounds,
+        "saturate_state_on_out_of_bounds": (
+            config.saturate_state_on_out_of_bounds
+        ),
+    }
+    env_kwargs = {
+        key: value for key, value in optional_env_kwargs.items() if value is not None
+    }
+    env = make_vec_env(
+        config.env_id,
+        n_envs=config.n_envs,
+        seed=config.seed,
+        env_kwargs=env_kwargs or None,
+    )
     local_artifacts_path = (
         config.local_artifacts_path / f"ppo_{config.env_id}_{config.seed}"
     )
     # Instantiate the agent
+    learning_rate = config.learning_rate
+    if config.final_learning_rate is not None:
+        learning_rate = linear_learning_rate(
+            config.learning_rate,
+            config.final_learning_rate,
+        )
+
     model = PPO(
         "MlpPolicy",
         env,
         gamma=config.gamma,
         use_sde=config.use_sde,
         sde_sample_freq=config.sde_sample_freq,
-        learning_rate=config.learning_rate,
+        learning_rate=learning_rate,
         n_steps=config.n_steps,
         verbose=config.verbose,
         seed=config.seed,
