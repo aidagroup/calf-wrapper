@@ -17,6 +17,7 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from torch import nn, optim
 from torch.nn import functional as F
 
+import calfwrapper.environments  # noqa: F401
 from calfwrapper.paths import TRAINING_OUTPUT
 
 ENVIRONMENTS = {
@@ -191,12 +192,14 @@ def train(settings: Settings) -> None:
     if not isinstance(action_space, gym.spaces.Box):
         raise TypeError("TD3 requires a continuous Box action space")
 
+    # These constructors consume the seeded PyTorch RNG in the order used by
+    # the published training runs.
     actor = Actor(observation_space, action_space).to(device)
-    target_actor = Actor(observation_space, action_space).to(device)
     qf1 = QNetwork(observation_space, action_space).to(device)
     qf2 = QNetwork(observation_space, action_space).to(device)
     qf1_target = QNetwork(observation_space, action_space).to(device)
     qf2_target = QNetwork(observation_space, action_space).to(device)
+    target_actor = Actor(observation_space, action_space).to(device)
     target_actor.load_state_dict(actor.state_dict())
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
@@ -231,6 +234,7 @@ def train(settings: Settings) -> None:
                 )
                 action = action_tensor.cpu().numpy().clip(action_space.low, action_space.high)
 
+        action = np.asarray(action, dtype=float)
         next_observation, reward, terminated, truncated, info = environments.step(action)
         replay_next_observation = next_observation.copy()
         for index, was_truncated in enumerate(truncated):
@@ -254,8 +258,8 @@ def train(settings: Settings) -> None:
                 ).clamp(-settings.noise_clip, settings.noise_clip)
                 noise *= target_actor.action_scale
                 next_action = (target_actor(data.next_observations) + noise).clamp(
-                    torch.as_tensor(action_space.low, device=device),
-                    torch.as_tensor(action_space.high, device=device),
+                    float(action_space.low[0]),
+                    float(action_space.high[0]),
                 )
                 next_q = torch.minimum(
                     qf1_target(data.next_observations, next_action),

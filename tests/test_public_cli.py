@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-from calfwrapper.cli import write_summary, write_trials
+from calfwrapper.cli import training_command, write_summary, write_trials
 from calfwrapper.config import TRAIN_CONFIGURATIONS
 from calfwrapper.evaluation import Trial
 from calfwrapper.experiments import ENVIRONMENTS
@@ -57,6 +57,26 @@ def test_training_commands_use_the_checkpoint_training_seeds() -> None:
             if checkpoint["environment"] == environment and checkpoint["kind"] == kind
         }
         assert checkpoint_seeds == {configured_seed}
+
+
+def test_training_commands_use_the_complete_article_budgets_and_selected_gpu(
+    tmp_path: Path,
+) -> None:
+    expected_budgets = {
+        "pendulum-ppo": 300_000,
+        "cartpole-ppo": 600_000,
+        "auv-td3": 3_000_000,
+        "robot-td3": 3_000_000,
+        "pendulum-ppo-lagrangian": 300_000,
+        "cartpole-ppo-lagrangian": 600_000,
+        "auv-td3-lagrangian": 3_000_000,
+        "robot-td3-lagrangian": 3_000_000,
+    }
+    for name, expected_budget in expected_budgets.items():
+        command = training_command(name, smoke=False, output=tmp_path, device="cuda:1")
+        assert int(command[command.index("--total-timesteps") + 1]) == expected_budget
+        assert command[command.index("--device") + 1] == "cuda:1"
+        assert str(tmp_path.resolve()) in " ".join(command)
 
 
 def test_write_trials_uses_article_terms(tmp_path: Path) -> None:

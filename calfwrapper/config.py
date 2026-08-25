@@ -10,6 +10,7 @@ class TrainConfiguration:
     name: str
     module: str
     arguments: tuple[str, ...]
+    total_timesteps: int
     smoke_arguments: tuple[str, ...]
     description: str
 
@@ -18,7 +19,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "pendulum-ppo": TrainConfiguration(
         name="pendulum-ppo",
         module="calfwrapper.training.ppo",
-        arguments=("pendulum", "--seed", "6", "--device", "cpu"),
+        arguments=("pendulum", "--seed", "6"),
+        total_timesteps=300_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -36,9 +38,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
             "cartpole-long-saturated-600k-annealed",
             "--seed",
             "45",
-            "--device",
-            "cpu",
         ),
+        total_timesteps=600_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -52,7 +53,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "auv-td3": TrainConfiguration(
         name="auv-td3",
         module="calfwrapper.training.td3",
-        arguments=("auv", "--seed", "0", "--device", "cpu"),
+        arguments=("auv", "--seed", "0"),
+        total_timesteps=3_000_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -66,7 +68,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "robot-td3": TrainConfiguration(
         name="robot-td3",
         module="calfwrapper.training.td3",
-        arguments=("robot", "--seed", "2", "--device", "cpu"),
+        arguments=("robot", "--seed", "2"),
+        total_timesteps=3_000_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -80,7 +83,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "pendulum-ppo-lagrangian": TrainConfiguration(
         name="pendulum-ppo-lagrangian",
         module="calfwrapper.training.ppo_lagrangian",
-        arguments=("pendulum", "--seed", "10", "--device", "cpu"),
+        arguments=("pendulum", "--seed", "10"),
+        total_timesteps=300_000,
         smoke_arguments=(
             "--total-timesteps",
             "200",
@@ -102,7 +106,12 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "cartpole-ppo-lagrangian": TrainConfiguration(
         name="cartpole-ppo-lagrangian",
         module="calfwrapper.training.ppo_lagrangian",
-        arguments=("cartpole-saturated-600k", "--seed", "42", "--device", "cpu"),
+        arguments=(
+            "cartpole-saturated-600k",
+            "--seed",
+            "42",
+        ),
+        total_timesteps=600_000,
         smoke_arguments=(
             "--total-timesteps",
             "1000",
@@ -124,7 +133,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "auv-td3-lagrangian": TrainConfiguration(
         name="auv-td3-lagrangian",
         module="calfwrapper.training.td3_lagrangian",
-        arguments=("underwater-drone", "--seed", "4", "--device", "cpu"),
+        arguments=("underwater-drone", "--seed", "4"),
+        total_timesteps=3_000_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -148,7 +158,8 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "robot-td3-lagrangian": TrainConfiguration(
         name="robot-td3-lagrangian",
         module="calfwrapper.training.td3_lagrangian",
-        arguments=("robot-navigation", "--seed", "1", "--device", "cpu"),
+        arguments=("robot-navigation", "--seed", "1"),
+        total_timesteps=3_000_000,
         smoke_arguments=(
             "--total-timesteps",
             "64",

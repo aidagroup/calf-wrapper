@@ -10,6 +10,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 
+import calfwrapper.environments  # noqa: F401
 from calfwrapper.paths import TRAINING_OUTPUT
 from calfwrapper.training.tracking import MlflowConfig, create_mlflow_logger, mlflow_monitoring
 
@@ -100,7 +101,7 @@ presets = {
         "Training of PPO on Pendulum-v1",
         ExperimentConfig(
             env_id="Pendulum-v1",
-            total_timesteps=102_000,
+            total_timesteps=300_000,
             n_steps=2048,
             n_envs=1,
             use_sde=True,

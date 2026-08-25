@@ -35,10 +35,24 @@ def run(command: list[str], *, dry_run: bool = False) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
 
-def training_command(name: str, smoke: bool, output: Path) -> list[str]:
+def training_command(
+    name: str,
+    smoke: bool,
+    output: Path,
+    device: str = "cuda:0",
+) -> list[str]:
     output = output.resolve()
     configuration = TRAIN_CONFIGURATIONS[name]
-    command = [sys.executable, "-m", configuration.module, *configuration.arguments]
+    command = [
+        sys.executable,
+        "-m",
+        configuration.module,
+        *configuration.arguments,
+        "--device",
+        device,
+    ]
+    if not smoke:
+        command.extend(("--total-timesteps", str(configuration.total_timesteps)))
     if configuration.module == "calfwrapper.training.ppo":
         command.extend(("--local-artifacts-path", str(output)))
     elif configuration.module == "calfwrapper.training.td3":
@@ -58,7 +72,10 @@ def training_command(name: str, smoke: bool, output: Path) -> list[str]:
 def command_train(args: argparse.Namespace) -> None:
     names = tuple(TRAIN_CONFIGURATIONS) if args.name == "all" else (args.name,)
     for name in names:
-        run(training_command(name, args.smoke, args.output), dry_run=args.dry_run)
+        run(
+            training_command(name, args.smoke, args.output, args.device),
+            dry_run=args.dry_run,
+        )
 
 
 def write_trials(trials: list[Trial], destination: Path) -> None:
@@ -233,6 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("name", choices=("all", *TRAIN_CONFIGURATIONS))
     train.add_argument("--smoke", action="store_true")
     train.add_argument("--dry-run", action="store_true")
+    train.add_argument(
+        "--device",
+        default="cuda:0",
+        help="Training device; the published runs used CUDA",
+    )
     train.add_argument("--output", type=Path, default=OUTPUTS / "training")
     train.set_defaults(handler=command_train)
 
