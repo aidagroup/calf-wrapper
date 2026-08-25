@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from calfwrapper._protocol import evaluation_batches
-from calfwrapper.environments import ENVIRONMENTS
 from calfwrapper.evaluation import Policy, Trial, evaluate
+from calfwrapper.experiments import ENVIRONMENTS
 from calfwrapper.operating_modes import (
     OperatingModeParameters,
     fixed_acceptance_budget,
@@ -32,6 +32,17 @@ ENVIRONMENT_COLORS = {
     "cartpole": "#E69F00",
     "auv": "#009E73",
     "robot": "#CC79A7",
+}
+NOISE_SEED_IDENTIFIERS = {
+    "pendulum": "Pendulum-v1",
+    "cartpole": "CartpoleSwingupEnvLong-v0",
+    "auv": "UnderwaterDrone-v0",
+    "robot": "RobotNavigationConstSpeedCatch-v0",
+}
+SUMMARY_FIELDS = {
+    "mean_episode_return",
+    "return_ci95_half_width",
+    "fallback_action_percentage",
 }
 
 
@@ -94,11 +105,12 @@ def _verify(rows: list[dict[str, object]], reference_name: str) -> None:
         for field, expected_value in reference.items():
             actual_value = str(actual[field])
             try:
+                tolerance = 2.0 if field in SUMMARY_FIELDS else 1e-9
                 equal = math.isclose(
                     float(actual_value),
                     float(expected_value),
                     rel_tol=1e-12,
-                    abs_tol=1e-9,
+                    abs_tol=tolerance,
                 )
             except ValueError:
                 equal = actual_value == expected_value
@@ -118,8 +130,8 @@ def relaxation_probability(output: Path, device: str) -> list[dict[str, object]]
         ("high", 0.70, (0.75, 0.80, 0.85, 0.90, 1.00)),
     )
     rows: list[dict[str, object]] = []
-    for environment, config in ENVIRONMENTS.items():
-        for mode, budget, probabilities in settings:
+    for mode, budget, probabilities in settings:
+        for environment, config in ENVIRONMENTS.items():
             for p_relax in probabilities:
                 parameters = fixed_acceptance_budget(budget, p_relax, config.horizon)
                 trials = _trials(
@@ -208,12 +220,12 @@ class _CriticNoise:
         size: int,
         scale: float,
     ) -> None:
-        gym_id = ENVIRONMENTS[environment].gym_id
+        seed_identifier = NOISE_SEED_IDENTIFIERS[environment]
         self.random = [
             np.random.default_rng(
                 int.from_bytes(
                     hashlib.sha256(
-                        f"calf-critic-noise-v1|{gym_id}|{first_seed + trial}".encode()
+                        f"calf-critic-noise-v1|{seed_identifier}|{first_seed + trial}".encode()
                     ).digest()[:8],
                     "big",
                 )

@@ -15,8 +15,8 @@ from pathlib import Path
 from calfwrapper._protocol import evaluation_batches
 from calfwrapper.baselines import evaluate_lagrangian
 from calfwrapper.config import TRAIN_CONFIGURATIONS
-from calfwrapper.environments import ENVIRONMENTS
 from calfwrapper.evaluation import Policy, Trial, evaluate
+from calfwrapper.experiments import ENVIRONMENTS
 from calfwrapper.figures import main_results
 from calfwrapper.operating_modes import OPERATING_MODES
 from calfwrapper.paths import OUTPUTS, REFERENCE_TRIALS, ROOT
@@ -44,12 +44,6 @@ def training_command(name: str, smoke: bool, output: Path) -> list[str]:
     elif configuration.module == "calfwrapper.training.td3":
         command.extend(
             (
-                "--tracking-uri",
-                f"file://{output / 'mlruns'}",
-                "--experiment-name",
-                "calfwrapper/train",
-                "--run-name",
-                name,
                 "--checkpoint-dir",
                 str(output / name / "checkpoints"),
             )

@@ -2,13 +2,13 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
-from src.controllers.cartpole import CartpoleEnergyBasedStabilizingPolicy
+from calfwrapper.fallback.cartpole import CartPoleFallbackPolicy
 
 
 @pytest.fixture
 def policy():
-    return CartpoleEnergyBasedStabilizingPolicy(
-        env_id="CartpoleSwingupEnvLong-v0",
+    return CartPoleFallbackPolicy(
+        env_id="CALFWrapper/CartPoleSwingUpLong-v0",
         pd_coefs=[77.76, 8.07, 20.72, 11.18],
         gain=2.5,
         gain_pos_vel=0.6,
@@ -24,7 +24,7 @@ def policy():
 
 
 def test_single_env_stabilization(policy):
-    env = gym.make("CartpoleSwingupEnvLong-v0")
+    env = gym.make("CALFWrapper/CartPoleSwingUpLong-v0")
     observation, info = env.reset(seed=42)
 
     # Run for sufficient steps to allow stabilization
@@ -46,7 +46,7 @@ def test_initial_state_batch_stabilization_without_termination(policy, base_seed
     tolerance = np.array([0.3, 0.3, 0.05, 0.05, 0.05])
 
     for seed in range(base_seed, base_seed + 30):
-        env = gym.make("CartpoleSwingupEnvLong-v0", terminate_on_out_of_bounds=False)
+        env = gym.make("CALFWrapper/CartPoleSwingUpLong-v0", terminate_on_out_of_bounds=False)
         observation, _ = env.reset(seed=seed)
         for step in range(1000):
             action = policy.get_action(observation)
@@ -59,7 +59,7 @@ def test_initial_state_batch_stabilization_without_termination(policy, base_seed
 
 def test_reward_position_clip_does_not_clip_cart_state():
     env = gym.make(
-        "CartpoleSwingupEnvLong-v0",
+        "CALFWrapper/CartPoleSwingUpLong-v0",
         terminate_on_out_of_bounds=False,
         reward_position_clip=5.0,
     )
@@ -77,7 +77,7 @@ def test_reward_position_clip_does_not_clip_cart_state():
 
 def test_nonterminating_state_saturation_clips_and_brakes_at_bounds():
     env = gym.make(
-        "CartpoleSwingupEnvLong-v0",
+        "CALFWrapper/CartPoleSwingUpLong-v0",
         terminate_on_out_of_bounds=False,
         saturate_state_on_out_of_bounds=True,
         position_termination_threshold=7.5,
@@ -108,7 +108,7 @@ def test_nonterminating_state_saturation_clips_and_brakes_at_bounds():
 )
 def test_configurable_cartpole_termination_thresholds(state, terminated):
     env = gym.make(
-        "CartpoleSwingupEnvLong-v0",
+        "CALFWrapper/CartPoleSwingUpLong-v0",
         position_termination_threshold=7.5,
         velocity_termination_threshold=12.0,
         angular_velocity_termination_threshold=15.0,

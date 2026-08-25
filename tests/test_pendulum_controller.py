@@ -3,12 +3,12 @@ import numpy as np
 import pytest
 from stable_baselines3.common.env_util import make_vec_env
 
-from src.controllers.pendulum import EnergyBasedStabilizingPolicy
+from calfwrapper.fallback.pendulum import PendulumFallbackPolicy
 
 
 @pytest.fixture
 def policy():
-    return EnergyBasedStabilizingPolicy(
+    return PendulumFallbackPolicy(
         gain=1.0,
         action_min=-2,
         action_max=2,

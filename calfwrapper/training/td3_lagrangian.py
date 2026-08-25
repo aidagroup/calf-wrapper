@@ -1,9 +1,8 @@
-"""Standalone CleanRL-style TD3-Lagrangian trainer and evaluator.
+"""TD3-Lagrangian trainer and evaluator.
 
-This file deliberately contains the complete algorithm.  It follows the pinned
-CleanRL TD3 loop used by the repository and adds a terminal-failure cost critic,
-a projected Lagrange multiplier, time-aware observations, and finite-horizon
-evaluation.
+This module contains the complete algorithm, including the terminal-failure
+cost critic, projected Lagrange multiplier, time-aware observations, and
+finite-horizon evaluation.
 """
 
 from __future__ import annotations
@@ -27,9 +26,9 @@ import torch.optim as optim
 import tyro
 from scipy.stats import beta
 
-import src  # noqa: F401  # Register custom environments.
-from src import TRAINING_OUTPUT
-from src.goal_reaching import goal_reaching_mask
+import calfwrapper.environments  # noqa: F401
+from calfwrapper.goal_reaching import goal_reaching_mask
+from calfwrapper.paths import TRAINING_OUTPUT
 
 CHECKPOINT_FORMAT = "calf-wrapper-cleanrl-td3-lagrangian-v2"
 
@@ -37,7 +36,7 @@ CHECKPOINT_FORMAT = "calf-wrapper-cleanrl-td3-lagrangian-v2"
 @dataclass
 class Args:
     environment: str = "underwater-drone"
-    env_id: str = "UnderwaterDrone-v0"
+    env_id: str = "CALFWrapper/ContaminatedZoneAUV-v0"
     horizon: int = 1500
     total_timesteps: int = 3_000_000
     buffer_size: int = 1_000_000
@@ -80,7 +79,7 @@ PRESETS = {
         "TD3-Lagrangian on Treasure-Collecting Robot",
         Args(
             environment="robot-navigation",
-            env_id="RobotNavigationConstSpeedCatch-v0",
+            env_id="CALFWrapper/TreasureCollectingRobot-v0",
             horizon=1000,
             seed=1,
             output_dir=TRAINING_OUTPUT / "td3-lagrangian-robot",
@@ -592,8 +591,8 @@ def load_actor_checkpoint(
 
 def run_training(args: Args) -> None:
     supported_tasks = {
-        ("UnderwaterDrone-v0", 1500),
-        ("RobotNavigationConstSpeedCatch-v0", 1000),
+        ("CALFWrapper/ContaminatedZoneAUV-v0", 1500),
+        ("CALFWrapper/TreasureCollectingRobot-v0", 1000),
     }
     if (args.env_id, args.horizon) not in supported_tasks:
         raise ValueError(

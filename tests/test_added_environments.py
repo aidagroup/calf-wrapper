@@ -2,17 +2,17 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
-from src.controllers.robot_navigation import RobotNavigationConstSpeedGoalController
-from src.controllers.underwaterdrone import UnderwaterDroneNominalController
+from calfwrapper.fallback.auv import AUVFallbackPolicy
+from calfwrapper.fallback.robot import RobotFallbackPolicy
 
 
 @pytest.mark.parametrize(
     ("env_id", "controller"),
     [
-        ("UnderwaterDrone-v0", UnderwaterDroneNominalController()),
+        ("CALFWrapper/ContaminatedZoneAUV-v0", AUVFallbackPolicy()),
         (
-            "RobotNavigationConstSpeedCatch-v0",
-            RobotNavigationConstSpeedGoalController(),
+            "CALFWrapper/TreasureCollectingRobot-v0",
+            RobotFallbackPolicy(),
         ),
     ],
 )
@@ -29,7 +29,7 @@ def test_added_environment_accepts_fallback_action(env_id, controller):
 
 
 def test_added_environment_reset_is_seeded():
-    for env_id in ("UnderwaterDrone-v0", "RobotNavigationConstSpeedCatch-v0"):
+    for env_id in ("CALFWrapper/ContaminatedZoneAUV-v0", "CALFWrapper/TreasureCollectingRobot-v0"):
         env = gym.make(env_id)
         first, _ = env.reset(seed=7)
         second, _ = env.reset(seed=7)

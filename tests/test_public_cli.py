@@ -6,8 +6,8 @@ from pathlib import Path
 
 from calfwrapper.cli import write_summary, write_trials
 from calfwrapper.config import TRAIN_CONFIGURATIONS
-from calfwrapper.environments import ENVIRONMENTS
 from calfwrapper.evaluation import Trial
+from calfwrapper.experiments import ENVIRONMENTS
 from calfwrapper.paths import ROOT
 from calfwrapper.verify import verify_trials
 

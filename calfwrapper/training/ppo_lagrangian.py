@@ -1,4 +1,4 @@
-"""Standalone CleanRL-style PPO-Lagrangian trainer and evaluator.
+"""PPO-Lagrangian trainer and evaluator.
 
 The constrained objective uses a single undiscounted terminal cost:
 ``1`` iff the episode ends outside the prescribed goal set, and ``0``
@@ -28,9 +28,9 @@ import tyro
 from scipy.stats import beta
 from torch.distributions.normal import Normal
 
-import src  # noqa: F401  # Register the paper's custom environments.
-from src import TRAINING_OUTPUT
-from src.goal_reaching import goal_reaching_mask
+import calfwrapper.environments  # noqa: F401
+from calfwrapper.goal_reaching import goal_reaching_mask
+from calfwrapper.paths import TRAINING_OUTPUT
 
 CHECKPOINT_FORMAT = "calf-wrapper-cleanrl-ppo-lagrangian-v1"
 
@@ -98,7 +98,7 @@ PRESETS = {
         "PPO-Lagrangian on the 1000-step CartPole evaluation task",
         Args(
             environment="cartpole",
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             horizon=1000,
             total_timesteps=300_000,
             anneal_lr=True,
@@ -115,7 +115,7 @@ PRESETS = {
         "PPO-Lagrangian on wide-bound 1000-step CartPole through 600k steps",
         Args(
             environment="cartpole",
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             horizon=1000,
             total_timesteps=600_000,
             anneal_lr=True,
@@ -137,7 +137,7 @@ PRESETS = {
         "PPO-Lagrangian on nonterminating saturated 1000-step CartPole through 600k steps",
         Args(
             environment="cartpole",
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             horizon=1000,
             total_timesteps=600_000,
             anneal_lr=True,
@@ -240,7 +240,7 @@ class TimeAwareObservation(gym.Wrapper):
 
 
 def cartpole_env_kwargs(args: Args) -> dict[str, object]:
-    if args.env_id != "CartpoleSwingupEnvLong-v0":
+    if args.env_id != "CALFWrapper/CartPoleSwingUpLong-v0":
         return {}
     return {
         "terminate_on_out_of_bounds": args.cartpole_terminate_on_out_of_bounds,
@@ -340,7 +340,7 @@ def transition_costs(
             np.zeros_like(current_potentials),
             np.zeros_like(initial_potentials),
         )
-    if args.env_id != "CartpoleSwingupEnvLong-v0":
+    if args.env_id != "CALFWrapper/CartPoleSwingUpLong-v0":
         raise ValueError("terminal-cost redistribution is implemented for CartPole")
 
     final_observations = infos.get("final_observation")
@@ -714,7 +714,7 @@ def evaluate(
 def run_training(args: Args) -> None:
     supported_tasks = {
         ("Pendulum-v1", 200),
-        ("CartpoleSwingupEnvLong-v0", 1000),
+        ("CALFWrapper/CartPoleSwingUpLong-v0", 1000),
     }
     if (args.env_id, args.horizon) not in supported_tasks:
         raise ValueError(
@@ -732,7 +732,7 @@ def run_training(args: Args) -> None:
         raise ValueError("paired_evaluation_episodes must be positive")
     if args.save_model_every_steps <= 0:
         raise ValueError("save_model_every_steps must be positive")
-    if args.env_id == "CartpoleSwingupEnvLong-v0":
+    if args.env_id == "CALFWrapper/CartPoleSwingUpLong-v0":
         for name, value in (
             (
                 "cartpole_position_termination_threshold",

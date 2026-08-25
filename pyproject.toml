@@ -37,7 +37,6 @@ calfwrapper = "calfwrapper.cli:main"
 [tool.poetry]
 packages = [
     { include = "calfwrapper" },
-    { include = "src" }
 ]
 
 [build-system]

@@ -14,6 +14,12 @@ from calfwrapper.paths import CHECKPOINTS
 
 EVALUATION_TRIALS = 100
 
+CHECKPOINT_ENVIRONMENT_IDS = {
+    "CartpoleSwingupEnvLong-v0": "CALFWrapper/CartPoleSwingUpLong-v0",
+    "UnderwaterDrone-v0": "CALFWrapper/ContaminatedZoneAUV-v0",
+    "RobotNavigationConstSpeedCatch-v0": "CALFWrapper/TreasureCollectingRobot-v0",
+}
+
 
 def _evaluation_seed(environment: str) -> int:
     return 20260801 if environment == "cartpole" else 42
@@ -23,8 +29,12 @@ def _ppo_trials(checkpoint: Path, device: torch.device, evaluation_seed: int) ->
     from calfwrapper.training import ppo_lagrangian as ppo
 
     payload = torch.load(checkpoint, map_location=device, weights_only=False)
+    checkpoint_arguments = ppo.Args(**payload["args"])
     arguments = replace(
-        ppo.Args(**payload["args"]),
+        checkpoint_arguments,
+        env_id=CHECKPOINT_ENVIRONMENT_IDS.get(
+            checkpoint_arguments.env_id, checkpoint_arguments.env_id
+        ),
         device=str(device),
         evaluation_episodes=EVALUATION_TRIALS,
         evaluation_seed=evaluation_seed,
@@ -37,7 +47,7 @@ def _ppo_trials(checkpoint: Path, device: torch.device, evaluation_seed: int) ->
     agent = ppo.Agent(environments).to(device)
     ppo.load_agent_checkpoint(
         checkpoint,
-        arguments,
+        checkpoint_arguments,
         agent,
         observation_shape,
         action_shape,
@@ -52,8 +62,12 @@ def _td3_trials(checkpoint: Path, device: torch.device, evaluation_seed: int) ->
     from calfwrapper.training import td3_lagrangian as td3
 
     payload = torch.load(checkpoint, map_location=device, weights_only=False)
+    checkpoint_arguments = td3.Args(**payload["args"])
     arguments = replace(
-        td3.Args(**payload["args"]),
+        checkpoint_arguments,
+        env_id=CHECKPOINT_ENVIRONMENT_IDS.get(
+            checkpoint_arguments.env_id, checkpoint_arguments.env_id
+        ),
         device=str(device),
         evaluation_episodes=EVALUATION_TRIALS,
         evaluation_seed=evaluation_seed,
@@ -70,7 +84,7 @@ def _td3_trials(checkpoint: Path, device: torch.device, evaluation_seed: int) ->
     ).to(device)
     td3.load_actor_checkpoint(
         checkpoint,
-        arguments,
+        checkpoint_arguments,
         actor,
         observation_shape,
         action_shape,

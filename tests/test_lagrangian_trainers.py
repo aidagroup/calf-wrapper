@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-import src  # noqa: F401
+import calfwrapper.environments  # noqa: F401
 from calfwrapper.training import ppo_lagrangian as ppo_lag
 from calfwrapper.training import td3_lagrangian as td3_lag
 
@@ -134,7 +134,7 @@ def test_ppo_squashed_policy_is_bounded_and_log_probability_reproducible():
 
 def test_ppo_initial_action_std_is_expressed_in_environment_units():
     envs = gym.vector.SyncVectorEnv(
-        [ppo_lag.make_env("CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0)]
+        [ppo_lag.make_env("CALFWrapper/CartPoleSwingUpLong-v0", horizon=1000, seed=44, index=0)]
     )
     agent = ppo_lag.Agent(envs, initial_action_std=1.0)
     torch.testing.assert_close(
@@ -146,7 +146,7 @@ def test_ppo_initial_action_std_is_expressed_in_environment_units():
 
 def test_ppo_action_std_cap_is_expressed_in_environment_units():
     envs = gym.vector.SyncVectorEnv(
-        [ppo_lag.make_env("CartpoleSwingupEnvLong-v0", horizon=1000, seed=44, index=0)]
+        [ppo_lag.make_env("CALFWrapper/CartPoleSwingUpLong-v0", horizon=1000, seed=44, index=0)]
     )
     agent = ppo_lag.Agent(envs, initial_action_std=10.0)
     agent.cap_action_std(2.0)
@@ -163,7 +163,9 @@ def test_ppo_action_std_cap_is_expressed_in_environment_units():
 
 
 def test_actor_state_round_trip_preserves_deterministic_actions():
-    envs = gym.vector.SyncVectorEnv([td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=2)])
+    envs = gym.vector.SyncVectorEnv(
+        [td3_lag.make_env("CALFWrapper/ContaminatedZoneAUV-v0", horizon=1500, seed=2)]
+    )
     observation_size = int(np.prod(envs.single_observation_space.shape))
     actor = td3_lag.Actor(observation_size, envs.single_action_space)
     restored = td3_lag.Actor(observation_size, envs.single_action_space)
@@ -175,8 +177,8 @@ def test_actor_state_round_trip_preserves_deterministic_actions():
 
 
 def test_auv_constructor_seed_controls_later_unseeded_resets():
-    first = td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=17)()
-    second = td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=17)()
+    first = td3_lag.make_env("CALFWrapper/ContaminatedZoneAUV-v0", horizon=1500, seed=17)()
+    second = td3_lag.make_env("CALFWrapper/ContaminatedZoneAUV-v0", horizon=1500, seed=17)()
     first.reset(seed=17)
     second.reset(seed=17)
     first_later, _ = first.reset()
@@ -247,7 +249,9 @@ def test_ppo_checkpoint_disk_round_trip_and_compatibility_rejection(tmp_path):
 
 
 def test_td3_checkpoint_disk_round_trip(tmp_path):
-    envs = gym.vector.SyncVectorEnv([td3_lag.make_env("UnderwaterDrone-v0", horizon=1500, seed=6)])
+    envs = gym.vector.SyncVectorEnv(
+        [td3_lag.make_env("CALFWrapper/ContaminatedZoneAUV-v0", horizon=1500, seed=6)]
+    )
     observation_shape = envs.single_observation_space.shape
     action_shape = envs.single_action_space.shape
     observation_size = int(np.prod(observation_shape))

@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from src.controllers.controller import Controller
-from src.critic_values import critic_values
+from calfwrapper.critic_values import critic_values
+from calfwrapper.fallback.base import FallbackPolicy
 
 
 class CALFWrapper:
@@ -16,7 +16,7 @@ class CALFWrapper:
         self,
         environment: Any,
         base_policy: Any,
-        fallback_policy: Controller,
+        fallback_policy: FallbackPolicy,
         *,
         nu: float,
         p_relax: float,

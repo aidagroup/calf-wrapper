@@ -16,5 +16,5 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run ruff check src calfwrapper tests
+      - run: uv run ruff check calfwrapper tests
       - run: uv run pytest -q

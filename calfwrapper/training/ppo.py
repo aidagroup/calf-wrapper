@@ -10,8 +10,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 
-from src import TRAINING_OUTPUT
-from src.utils.mlflow import MlflowConfig, create_mlflow_logger, mlflow_monitoring
+from calfwrapper.paths import TRAINING_OUTPUT
+from calfwrapper.training.tracking import MlflowConfig, create_mlflow_logger, mlflow_monitoring
 
 
 @dataclass
@@ -119,7 +119,7 @@ presets = {
     "cartpole": (
         "Training of PPO on CartPole-v1",
         ExperimentConfig(
-            env_id="CartpoleSwingupEnv-v0",
+            env_id="CALFWrapper/CartPoleSwingUp-v0",
             total_timesteps=300_000,
             n_steps=2048,
             n_envs=1,
@@ -139,7 +139,7 @@ presets = {
     "cartpole-long-wide": (
         "Training of PPO on the 1000-step CartPole task with 1.5x bounds",
         ExperimentConfig(
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             position_termination_threshold=7.5,
             velocity_termination_threshold=12.0,
             angular_velocity_termination_threshold=15.0,
@@ -163,7 +163,7 @@ presets = {
     "cartpole-long-wide-600k-annealed": (
         "Training of PPO on wide-bound CartPole with a stabilizing LR schedule",
         ExperimentConfig(
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             position_termination_threshold=7.5,
             velocity_termination_threshold=12.0,
             angular_velocity_termination_threshold=15.0,
@@ -188,7 +188,7 @@ presets = {
     "cartpole-long-saturated-600k-annealed": (
         "Training PPO on nonterminating CartPole with saturated state bounds",
         ExperimentConfig(
-            env_id="CartpoleSwingupEnvLong-v0",
+            env_id="CALFWrapper/CartPoleSwingUpLong-v0",
             position_termination_threshold=7.5,
             velocity_termination_threshold=12.0,
             angular_velocity_termination_threshold=15.0,

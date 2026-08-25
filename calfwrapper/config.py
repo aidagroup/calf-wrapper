@@ -52,7 +52,7 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "auv-td3": TrainConfiguration(
         name="auv-td3",
         module="calfwrapper.training.td3",
-        arguments=("underwater-drone", "--seed", "0", "--device", "cpu"),
+        arguments=("auv", "--seed", "0", "--device", "cpu"),
         smoke_arguments=(
             "--total-timesteps",
             "64",
@@ -66,7 +66,7 @@ TRAIN_CONFIGURATIONS: dict[str, TrainConfiguration] = {
     "robot-td3": TrainConfiguration(
         name="robot-td3",
         module="calfwrapper.training.td3",
-        arguments=("robot-navigation", "--seed", "2", "--device", "cpu"),
+        arguments=("robot", "--seed", "2", "--device", "cpu"),
         smoke_arguments=(
             "--total-timesteps",
             "64",

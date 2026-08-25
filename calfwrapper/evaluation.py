@@ -13,12 +13,12 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from calfwrapper.environments import ENVIRONMENTS
+from calfwrapper.experiments import ENVIRONMENTS
+from calfwrapper.goal_reaching import goal_neighborhood_mask, goal_reaching_mask
+from calfwrapper.models.td3 import TD3Policy
 from calfwrapper.operating_modes import OperatingModeParameters, operating_mode_parameters
 from calfwrapper.paths import CHECKPOINTS
 from calfwrapper.wrapper import CALFWrapper
-from src.goal_reaching import goal_neighborhood_mask, goal_reaching_mask
-from src.models.cleanrl_td3 import CleanRLTD3
 
 Policy = Literal[
     "fallback",
@@ -77,7 +77,7 @@ def _load_base_policy(environment_name: str, checkpoint: Path, device: str, seed
     environment = ENVIRONMENTS[environment_name]
     if environment.algorithm == "ppo":
         return PPO.load(checkpoint, device=device, seed=seed)
-    return CleanRLTD3.load(checkpoint, device=device)
+    return TD3Policy.load(checkpoint, device=device)
 
 
 def _latest_states(

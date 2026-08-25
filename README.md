@@ -67,3 +67,28 @@ Training runs and their artifacts are written to `outputs/training/`.
 
 The checkpoints used for the article evaluation are stored in
 `artifacts/checkpoints/` and tracked with Git LFS.
+
+## Repository structure
+
+```text
+calfwrapper/
+  environments/       CartPole, AUV, and robot environments
+  fallback/            Fallback policies for all four environments
+  models/              Policy and critic model loading
+  training/            PPO, TD3, and Lagrangian training implementations
+  cli.py                Public train and evaluation commands
+  experiments.py        Article environment configurations
+artifacts/checkpoints/
+  base/                 Base-policy checkpoints by environment and stage
+  lagrangian/           Lagrangian checkpoints by environment and stage
+reference/              Published evaluation data
+figures/                Reproduced article figures
+tables/                 Reproduced article tables
+tests/                  Automated validation
+outputs/                Training and evaluation outputs
+```
+
+The Pendulum environment is provided by Gymnasium. Its fallback policy is in
+`calfwrapper/fallback/pendulum.py`, and its checkpoints are under
+`artifacts/checkpoints/base/pendulum/` and
+`artifacts/checkpoints/lagrangian/pendulum/`.
